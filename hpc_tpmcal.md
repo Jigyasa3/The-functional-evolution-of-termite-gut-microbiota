@@ -95,7 +95,8 @@ cat ${IN_DIR}/multicov_output_seed-${num} | sed 's/gene_id//g' | awk '{print $1,
 
 `Rscript tpm_cal.R genelength-229-01-prokka.map.gtf.bed.txt multicov_output_seed_count-229-01.txt TPM-229-01.txt`
 
-``` {save as tpm_cal.R}
+``` 
+#{save as tpm_cal.R}
 library(dplyr)
 library(plyr)
 library(tidyverse)
@@ -132,7 +133,8 @@ write.table(length_count2, file=output_file, col.names=TRUE, sep="\t")
 
 `Rscript prokTPM_cal.R TPM-229-01.txt prokcontignames-229-01.txt prokTPM-229-01.txt`
 
-```{save as prokTPM_cal.R}
+```
+#{save as prokTPM_cal.R}
 library(dplyr)
 library(stringr)
 
@@ -163,6 +165,25 @@ write.table(gtdb_tpm3, file=output_file, col.names=TRUE, sep="\t")
 #formula of TPM used-> (read_count of each gene * library read_length * 10^6)/(gene_length of each gene * sum[read_count*library_read_length/gene_length])
 ```
 
+## join protein annotations (hpc_protanno.md) with TPM files to get the final files for statistical analysis-
 
+`module load R/3.6.1`
+
+
+```
+ #in R
+
+tpm<-read.csv("all-samples-prokTPM.txt",sep="\t") #cat TPM*.txt > all-samples-prokTPM.txt
+markers<-read.csv("all-40markers.txt")
+colnames(markers)<-c("cogmarkers","X","samplename","genename","fullnames")
+tpm2<-merge(tpm,markers,by.x=c("file_name","gene_name"),by.y=c("samplename","genename"),all.x=TRUE) #merge with COG markers annotation file
+
+cazy<-read.csv("all-cazymes.txt",header=FALSE)
+colnames(cazy)<-c("file_name","cazy_anno","gene_name")
+tpm3<-merge(tpm2,cazy,by=c("file_name","gene_name"),all.x=TRUE) #merge with cazyme annotation file
+
+
+
+```
 
 
