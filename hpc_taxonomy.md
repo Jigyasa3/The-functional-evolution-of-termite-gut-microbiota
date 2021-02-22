@@ -157,7 +157,10 @@ grep -c ">" all-samples-contigs.fasta
 [1] 480971195
 
 #nr microbial contigs-
-
+wc -l allsamples-archaeaonly-newname-megan-matches.txt
+[1] 1483566
+wc -l allsamples-bacteriaonly-newname-megan-matches.txt
+[1] 146547721 
 
 #GTDB microbial contigs-
 cat final-krakenoutput-* > allsamples-krakentaxonomy-feb2021.txt
@@ -167,10 +170,21 @@ wc -l uniq-contignames.txt
 
 ```
 
-## check3-why so much difference between nr and GTDB taxonomic annotation?
+## check3-why GTDB annotates only 27% of nr microbial contigs?
 
 ```
-cat newname-megan-matches-* > allsamples-nr-meganmatches.txt #all contigs after nr annotation
+#in R-
+gtdb_contigs<-read.csv("allsamples-krakentaxonomy-feb2021.txt")
+colnames(gtdb_contigs)<-c("X","fullnames","gtdb_taxonomy")
+
+nr_archaea<-read.csv("allsamples-archaeaonly-newname-megan-matches.txt",header=FALSE)
+nr_archaea$fullnames<-paste(nr_archaea$V1,nr_archaea$V2,sep="_")
+
+nrnotgtdb<-anti_join(nr_archaea, gtdb_contigs, by="fullnames")
+nrow(nrnotgtdb)
+[1] 1482690
+
+
 
 
 ```
