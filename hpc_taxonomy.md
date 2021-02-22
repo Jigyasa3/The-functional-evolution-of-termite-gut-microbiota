@@ -170,12 +170,31 @@ wc -l uniq-contignames.txt
 
 ## check3-why so much difference between nr and GTDB taxonomic annotation?
 
+```
+cat newname-megan-matches-* > allsamples-nr-meganmatches.txt #all contigs after nr annotation
+
+
+```
+
 ## check4-Any difference between GTDB contig annotation and GTDB marker gene annotation?
 ```
 #in R
 module load R/3.6.1
 
 contigtaxa<-read.csv("allsamples-krakentaxonomy-feb2021.txt")
+cogtaxa<-read.csv("allcogs-allsamples-finalkrakenoutput.csv")
+tpm<-read.csv("all-samples-prokTPM.txt",sep="\t")
+tpm$fullproteinname<-paste(tpm$file_name,tpm$gene_name,sep="_")
+
+cogtaxa2<-merge(cogtaxa,tpm,by.x="V1.x",by.y="fullproteinname") #get contig info for each cog protein
+colnames(cogtaxa2)<-c("fullproteinname","markers","X.x","markertaxonomy","X.y","gene_name","gene_length","contig_name","gene_count","countbylength","file_name","fullnames")
+
+cogtaxa_contigtaxa2<-merge(cogtaxa2,contigtaxa,by.x=c("fullnames","markertaxonomy"),by.y=c("V1.x","V1.y")) #join by common contigname and taxonomy
+
+nrow(cogtaxa_contigtaxa2)
+[1] 81964
+> nrow(cogtaxa2)
+[1] 147364
 
 
 ```
