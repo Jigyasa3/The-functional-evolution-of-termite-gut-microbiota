@@ -90,6 +90,49 @@ kraken3$V2<-NULL
 write.csv(kraken3,file=output_file)
 ```
 
+## COG marker gene taxonomy
+
+```
+#!/bin/bash
+#SBATCH --job-name=iqtree
+#SBATCH --partition=compute
+#SBATCH --time=1-0
+#SBATCH --mem=180G
+#SBATCH --mail-user=jigyasa.arora@oist.jp
+#SBATCH --mail-type=BEGIN,FAIL,END
+
+#SBATCH --output=iqtree_nt_%A-%a.out
+#SBATCH -o out_iqtree.%j
+#SBATCH -e err_iqtree.%j
+#SBATCH --array 0-225
+
+#load modules-
+DNA_DIR="/bucket/BourguignonU/Jigs_backup/working_files/AIMS/AIM2/tpm_functional_annotation/functional_annotation/all_prokka_outputs/all_fna_sequences_Dec2019"
+cd ${DNA_DIR}/
+
+files=(2-renamed-*fasta)
+##echo "list: " ${files[${SLURM_ARRAY_TASK_ID}]} # this generates a list of $sf files
+file1=${files[${SLURM_ARRAY_TASK_ID}]} #it reads each index at a time
+file2=${file1/2-renamed-/}
+file3=${file2/-prokka.fasta/}
+
+PROTEIN_DIR="/bucket/BourguignonU/Jigs_backup/working_files/AIMS/AIM2/tpm_functional_annotation/functional_annotation/all_prokka_outputs/all_protein_sequences_Dec2019/with_filenames"
+OUT_DIR="/flash/BourguignonU/Jigs/markers/allmarkers_re"
+
+fetchMGs.pl -m extraction -x /home/j/jigyasa-arora/local/fetchMGs/bin -d ${DNA_DIR}/${file1} ${PROTEIN_DIR}/filename-${file3}-prokka.faa-smallername.faa -o ${OUT_DIR}/${file3}-fetchmoutput -t 16 ##bin directory where you cloned the repo.
+
+```
+
+## group data by COG markers. Taxonomic annotation of markers (.fna) files same way as contig taxonomic annotation done above.
+
+```
+while read line;do while read cogs;do cp ${line}/${cogs}*faa allfetchm_nucoutput/${line}-${cogs}.faa;done < allcogs.txt ;done <filesnames.txt
+
+while read line;do while read cogs;do cp ${line}/${cogs}*fna allfetchm_nucoutput/${line}-${cogs}.fna;done < allcogs.txt ;done <filesnames.txt
+
+##perform taxonomic annotation of COGs as done above using KRAKEN2
+```
+
 ## check1- Does each contig has one annotation?
 
 ```
@@ -111,6 +154,7 @@ nrow(krakenoutput)
 ```
 #total no. of assembled contigs-
 grep -c ">" all-samples-contigs.fasta
+[1] 480971195
 
 #nr microbial contigs-
 awk -F':' '{sum+=$2;} END{print sum;}' noof_nrcontigs.txt
@@ -124,4 +168,15 @@ wc -l uniq-contignames.txt
 
 ```
 
-`
+## check3-why so much difference between nr and GTDB taxonomic annotation?
+
+## check4-Any difference between GTDB contig annotation and GTDB marker gene annotation?
+```
+#in R
+module load R/3.6.1
+
+contigtaxa<-read.csv("allsamples-krakentaxonomy-feb2021.txt")
+
+
+```
+
