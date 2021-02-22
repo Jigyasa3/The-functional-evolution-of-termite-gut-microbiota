@@ -157,8 +157,7 @@ grep -c ">" all-samples-contigs.fasta
 [1] 480971195
 
 #nr microbial contigs-
-awk -F':' '{sum+=$2;} END{print sum;}' noof_nrcontigs.txt
-[1] 148031287
+
 
 #GTDB microbial contigs-
 cat final-krakenoutput-* > allsamples-krakentaxonomy-feb2021.txt
