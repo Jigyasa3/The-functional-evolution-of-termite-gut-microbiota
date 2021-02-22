@@ -38,13 +38,56 @@ kraken2 --db ${DB_DIR} ${IN_DIR}/${file1} --output ${OUT_DIR}/kraken-output-${fi
 
 ## generating the final taxonomy file, with annotation per contig-
 
-`
+```
+files=(2-kraken-output-allprokaryotic_contigs-*.txt) #read the kraken output
+file1=${files[${SLURM_ARRAY_TASK_ID}]} #it reads each index at a time
+file2=${file1/2-kraken-output-allprokaryotic_contigs-/}
+
+module load R/3.6.1
+Rscript krakenoutputs.R ${CONTIG_DIR}/${file1} ${CONTIG_DIR}/kraken-report-allprokaryotic_contigs-${file2} ${OUT_DIR}/final-krakenoutput-${file2}
+```
 
 ```
 #save as "krakenoutputs.R"
+#USAGE- Rscript [kraken] [taxonomy] [output_file]
+
+args <- commandArgs(TRUE)
+kraken <- args[1] #2-kraken file
+taxonomy <- args[2] #report file
+output_file <- args[3]
 
 
+##getting a final kraken file-
+#awk -F"\t" '{print $2"\t"$3}' kraken-output-301-92.txt > 2-kraken-output-301-92.txt
 
+##in R-
+library(dplyr)
+
+kraken<-read.csv(file=kraken,sep="\t",header=FALSE)
+kraken$V2<-gsub(" \\(taxid.*$","",kraken$V2)
+
+taxonomy<-read.csv(file=taxonomy,header=FALSE,sep="\t")
+taxonomy$V1<-as.character(taxonomy$V1)
+taxonomy$lca<-gsub("^.*\\|","",taxonomy$V1)
+taxonomy$lca<-gsub("^.*__","",taxonomy$lca)
+
+#remove duplicates per lca-
+taxonomy2<-taxonomy
+levels<-taxonomy2%>%select(lca)%>%unique
+levels<-as.vector(levels$lca)
+
+taxonomy2$lca <- factor(taxonomy2$lca, levels = levels)
+taxonomy2 <- taxonomy2[order(taxonomy2$lca), ]
+taxonomy3<-taxonomy2[!duplicated(taxonomy2[,c('lca')]),]
+
+
+#note- the two joining columns need to be character vectors-
+kraken2<-merge(kraken,taxonomy3,by.x="V2",by.y="lca")
+kraken3<-kraken2%>%filter(V2!="unclassified")
+kraken3$V2.y<-NULL
+kraken3$V2<-NULL
+
+write.csv(kraken3,file=output_file)
 ```
 
 ## check1- Does each contig has one annotation?
@@ -63,4 +106,21 @@ nrow(krakenoutput)
 [1] 716080
 ```
 
-## check2-how many prokaryotic contigs (from nr) were annotated by GTDB-
+## check2-how many prokaryotic contigs were annotated-
+
+```
+#total no. of assembled contigs-
+grep -c ">" all-samples-contigs.fasta
+
+#nr microbial contigs-
+
+
+#GTDB microbial contigs-
+cat final-krakenoutput-* > allsamples-krakentaxonomy-feb2021.txt
+sort contignames.txt | uniq -u > uniq-contignames.txt
+wc -l uniq-contignames.txt
+[1] 40254274
+
+```
+
+`
