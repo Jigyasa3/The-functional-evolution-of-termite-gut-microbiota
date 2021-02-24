@@ -39,13 +39,38 @@ hmmscan -E 1.0e-5 -o 229-01-HMMoutputfile --tblout 229-01-HMM-persequence-output
 #NOTE- Even though a non-stringent evlaue cutoff used in the initial analysis, the final version has evalue <1e-30 (see below).
 ```
 
-### b)get the hmmscan output file to a text delimited file
+### b) get the hmmscan output file to a text delimited file
 
 `sh hmmscan-parser.sh 229-01-HMM-perdomain-output > dbcan-229-01-HMM-perdomain-output`
 
-## c) use a more stringent evalue cutoff for final CAZYme annotation
+### c) use a more stringent evalue cutoff for final CAZYme annotation. Get best hit per protein sequence
 
-`awk -F"," '$7<1e-30 {print $2","$3","$4}' dbcan-229-01-HMM-perdomain-output > evalue30-229-01-HMM-perdomain-output`
+```
+awk -F"," '$7<1e-30 {print $2"\t"$3"\t"$4"\t"$7"\t"$12}' dbcan-229-01-HMM-perdomain-output > evalue30-229-01-HMM-perdomain-output
+
+export LC_ALL=C LC_LANG=C; sort -k2,2 -k5,5gr -k4,4g evalue30-cazy-output-229-01.txt > sorted-evalue30-cazy-output-229-01.txt #sort by proteinID, bitscore, evalue
+
+for next in $(cut -f2 sorted-evalue30-cazy-output-229-01.txt | sort | uniq -u); do grep -w -m 1 "$next" sorted-evalue30-cazy-output-229-01.txt; done > top-evalue30-cazy-229-01.txt
+# cut and sort proteinID column, grep fullwords (-w) and stop after first match (-m 1)
+
+cat top-evalue30-* > allsamples-evalue30-cazymes.txt
+
+```
+
+### d) check if each protein is annotated only once, if not then get the best match out-
+
+```
+#in R-
+library(dplyr)
+cazy<-read.csv("2-allsamples-evalue30-cazymes.txt")
+cazy_contigs<-cazy%>%select(fullnames)%>%group_by(fullnames)%>%count()
+cazy_contigs2<-cazy_contigs%>%filter(n>1)
+nrow(cazy_contigs2)
+[1] 2643
+
+
+
+```
 
 
 
