@@ -61,5 +61,22 @@ allannotations_tpm_taxonomy$prokTPM<-as.numeric(as.character(allannotations_tpm_
 contig_length<-read.csv("/bucket/BourguignonU/Jigs_backup/working_files/AIMS/paper1/markergenes/markers-rpkm/individualanalysis_2020/all-contigs-readcount.csv")
 
 allannotations_tpm_taxonomy_contiglen<-merge(allannotations_tpm_taxonomy,contig_length,by.x=c("samples","contig_name"),by.y=c("sample_names","contig_names"))
+write.csv(allannotations_tpm_taxonomy_contiglen,file="allannotations_tpm_taxonomy_contiglen.csv")
+
+joined1<-allannotations_tpm_taxonomy_contiglen%>%filter(contig_length>=1000 & read_count >=100 & TPM>=1)
+write.csv(joined1,file="all-metagenome-annotation-taxonomy-1000bps.txt")
+
+setDT(joined1)
+joined1_genes<-joined1[, .(TPM = sum(prokTPM)), by = .(samplename,annotation)]
+write.csv(joined1_genes,file="1000bps_genes.txt")
+
+joined3<-allannotations_tpm_taxonomy_contiglen%>%filter(contig_length>=5000 & read_count >=100 & TPM>=1)
+write.csv(joined3,file="all-metagenome-annotation-taxonomy-5000bps.txt")
+
+setDT(joined3)
+joined3_genes<-joined3[, .(TPM = sum(prokTPM)), by = .(samplename,annotation)]
+write.csv(joined3_genes,file="5000bps_genes.txt")
+
+
 
 ```
