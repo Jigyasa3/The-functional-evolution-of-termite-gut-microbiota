@@ -54,6 +54,11 @@ write.csv(allannotations_tpm_taxonomy,file="allannotations_tpm_taxonomy.csv")
 ## c) Generating files for statistical analysis
 
 ```
+allannotations_tpm_taxonomy<-read.csv("allannotations_tpm_taxonomy.csv")
+allannotations_tpm_taxonomy$gene_count<-as.numeric(as.character(allannotations_tpm_taxonomy$gene_count))
+allannotations_tpm_taxonomy$prokTPM<-as.numeric(as.character(allannotations_tpm_taxonomy$prokTPM))
+
+contig_length<-read.csv("/bucket/BourguignonU/Jigs_backup/working_files/AIMS/paper1/markergenes/markers-rpkm/individualanalysis_2020/all-contigs-readcount.csv")
 
 
 ```
