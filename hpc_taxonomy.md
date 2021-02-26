@@ -43,6 +43,17 @@ xvfb-run /work/student/jigyasa-arora/tools/blast2lca -i ${IN_DIR}/230-${num}_new
 
 ```
 
+## Extract out prokaryotic contigs out
+```
+
+grep "d__Bacteria" megan-matches-229-01.txt > bacterial-megan-matches-229-01.txt
+grep "d__Archaea" megan-matches-229-01.txt > archaeal-megan-matches-229-01.txt
+
+cat bacterial-megan-matches-229-01.txt archaeal-megan-matches-229-01.txt > names-bacterial-2-newname-megan-matches-229-01.txt
+
+seqtk subseq allcontigs-229-01.fasta names-bacterial-2-newname-megan-matches-229-01.txt > bacterial-contigs-229-01.fasta #extract prokaryotic contigs from nr
+```
+
 ## GTDB database to annotate the prokaryotic contigs
 
 ```
@@ -213,26 +224,10 @@ wc -l uniq-contignames.txt
 
 ```
 
-## check3-why GTDB annotates only 27% of nr microbial contigs?
-
-```
-#in R-
-gtdb_contigs<-read.csv("allsamples-krakentaxonomy-feb2021.txt")
-colnames(gtdb_contigs)<-c("X","fullnames","gtdb_taxonomy")
-
-nr_archaea<-read.csv("allsamples-archaeaonly-newname-megan-matches.txt",header=FALSE)
-nr_archaea$fullnames<-paste(nr_archaea$V1,nr_archaea$V2,sep="_")
-
-nrnotgtdb<-anti_join(nr_archaea, gtdb_contigs, by="fullnames")
-nrow(nrnotgtdb)
-[1] 1482690
-
-
-
 
 ```
 
-## check4-Any difference between GTDB contig annotation and GTDB marker gene annotation?
+## check3-Any difference between GTDB contig annotation and GTDB marker gene annotation?
 ```
 #in R
 module load R/3.6.1
