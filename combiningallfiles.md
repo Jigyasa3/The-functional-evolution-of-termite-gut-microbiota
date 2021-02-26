@@ -60,5 +60,6 @@ allannotations_tpm_taxonomy$prokTPM<-as.numeric(as.character(allannotations_tpm_
 
 contig_length<-read.csv("/bucket/BourguignonU/Jigs_backup/working_files/AIMS/paper1/markergenes/markers-rpkm/individualanalysis_2020/all-contigs-readcount.csv")
 
+allannotations_tpm_taxonomy_contiglen<-merge(allannotations_tpm_taxonomy,contig_length,by.x=c("samples","contig_name"),by.y=c("sample_names","contig_names"))
 
 ```
