@@ -224,10 +224,8 @@ wc -l uniq-contignames.txt
 
 ```
 
-
-```
-
 ## check3-Any difference between GTDB contig annotation and GTDB marker gene annotation?
+
 ```
 #in R
 module load R/3.6.1
