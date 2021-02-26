@@ -1,4 +1,47 @@
-## nr database to get prokaryotic and non-prokaryotic contigs out
+## DIAMOND BLAST against the nr database to get prokaryotic and non-prokaryotic contigs out. LCA annotation of each contig using MEGAN6 command line version.
+
+```
+#!/bin/bash
+#SBATCH --job-name=megan_diamondx_230
+#SBATCH --partition=largemem
+#SBATCH --time=14-0
+#SBATCH --mem=100G
+#SBATCH --ntasks=1
+#SBATCH --mail-user=jigyasa-arora@oist.jp
+#SBATCH --mail-type=BEGIN,FAIL,END
+ 
+#SBATCH --output=megan_nt_%A-%a.out
+#SBATCH -o out_megan.%j
+#SBATCH -e err_megan.%j
+ 
+#SBATCH --array 1-26
+num=$(printf "%02d" $SLURM_ARRAY_TASK_ID) #add two zeros infront
+
+# command to run
+export PATH=$PATH:/home/j/jigyasa-arora/local
+module load ncbi-blast/2.6.0+
+ 
+ 
+IN_DIR="/230-run"
+OUT_DIR="/230-run"
+DB_DIR="/work/student/jigyasa-arora/BourguignonU_data/main_ID230+ID231_2/ID230/joinedfiles/MEGAN/db"
+TAX_DIR="/work/student/jigyasa-arora"
+
+ 
+diamond blastx --query ${IN_DIR}/230-${num}_newname_scaffolds.fasta --db ${DB_DIR}/nr --outfmt 5 --out ${IN_DIR}/230-${num}_newname_scaffolds.fasta.xml --threads 15
+
+#convert to txt format file-
+
+xvfb-run /work/student/jigyasa-arora/tools/blast2lca -i ${IN_DIR}/230-${num}_newname_scaffolds.fasta.xml -f BlastXML -o megan-matches-${num}.txt -a2t /work/student/jigyasa-arora/prot_acc2tax-Nov2018X1.abin
+
+
+#megan run on raw joined reads, no cut-offs
+#outfmt 5 = xml format
+#daa format is directly used in megan
+#-alg -> to use lca algorithm
+
+
+```
 
 ## GTDB database to annotate the prokaryotic contigs
 
