@@ -1,5 +1,5 @@
-# termite_146guts_microbes_function-
-scripts to reproduce data analysis from raw reads to figures in the paper
+# termite_146guts_microbes_function repository
+Scripts to reproduce data analysis from raw reads to figures for paper <add link> examining evolution of lignocellulose digestion in termite gut microbes across 150 mya of termite host evolutionary history.
 
 # workflow
-![](https://github.com/Jigyasa3/termite_146guts_microbes_function-/blob/main/schematics.pdf)
+![](schematics.pdf)
