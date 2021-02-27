@@ -14,6 +14,15 @@ colnames(cogs)<-c("markers","X","fullproteinnames","markertaxonomy")
 tpm_cogs<-merge(tpm,cogs,by="fullproteinnames")
 write.csv(tpm_cogs,file="tpm_cogs_allsamples.csv")
 
+contigs<-read.csv("/bucket/BourguignonU/Jigs_backup/working_files/AIMS/paper1/markergenes/markers-rpkm/individualanalysis_2020/all-contigs-readcount.csv")
+contigs<-contigs%>%select(contig_names,sample_names,contig_length)%>%unique()
+
+cogs_contigs<-merge(cogs,contigs,by.x=c("file_name","contig_names"),by.y=c("sample_names","contig_names"))
+cogs_contigs$contig_length<-as.numeric(as.character(cogs_contigs$contig_length))
+cogs_contigs_1000above<-cogs_contigs%>%filter(contig_length>=1000) #get cogs present in contigs >1000bps
+
+write.csv(cogs_contigs_1000above,file="tpm_cogs_allsamples_feb2021_1000bpscontigs.csv")
+
 ```
 
 ### b) Generating the final functional annotation file-
