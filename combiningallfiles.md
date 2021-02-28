@@ -75,6 +75,8 @@ write.csv(allannotations_tpm_taxonomy_contiglen,file="allannotations_tpm_taxonom
 joined1<-allannotations_tpm_taxonomy_contiglen%>%filter(contig_length>=1000 & read_count >=100 & TPM>=1)
 write.csv(joined1,file="all-metagenome-annotation-taxonomy-1000bps.txt")
 
+
+## NOTE- for statistical analysis ensure that there are no duplicates per proteinID otherwise they will counted in summing.
 setDT(joined1)
 joined1_genes<-joined1[, .(TPM = sum(prokTPM)), by = .(samplename,annotation)]
 write.csv(joined1_genes,file="1000bps_genes.txt")
@@ -96,17 +98,24 @@ joined1<-read.csv("/bucket/BourguignonU/Jigs_backup/working_files/AIMS/paper1/ma
 fefe<-read.csv("/bucket/BourguignonU/Jigs_backup/working_files/AIMS/paper1/bin_taxonomy/all_my_bins/prokka_output/all_faa/pathways/hydrogenases/metagenome_contigs/evalue30_cutoff/2-fefe-hyddb-results.csv",header=FALSE,sep=",")
 
 allmeta_fefe<-merge(fefe,allmeta,by.x="V1",by.y="fullproteinnames")
-allmeta_fefe<-allmeta_fefe%>%select(V1,V2,samples,contig_name,proteins,annotation,gene_length,gene_count,prokTPM,full_contig_name,contig_length)%>%unique()
-
+allmeta_fefe<-allmeta_fefe%>%select(V1,V2,samples,contig_name,proteins,gene_length,gene_count,prokTPM,full_contig_name,contig_length)%>%unique()
 write.csv(allmeta_fefe,file="fefe_hyddb_prokTPM.csv")
+
+library(data.table)
+setDT(allmeta_fefe)
+allmeta_fefe2<-allmeta_fefe[, .(TPM = sum(prokTPM)), by = .(samples,V2)] 
+write.csv(allmeta_fefe2,file="fefe_hydd_groups_prokTPM.csv")
 
 #NiFe hydrogenases
 nife<-read.csv("/bucket/BourguignonU/Jigs_backup/working_files/AIMS/paper1/bin_taxonomy/all_my_bins/prokka_output/all_faa/pathways/hydrogenases/metagenome_contigs/evalue30_cutoff/2-nife-hyddb-results.csv",header=FALSE,sep=",")
 
 allmeta_nife<-merge(nife,allmeta,by.x="V1",by.y="fullproteinnames")
-allmeta_nife<-allmeta_nife%>%select(V1,V2,samples,contig_name,proteins,annotation,gene_length,gene_count,prokTPM,full_contig_name,contig_length)%>%unique()
-
+allmeta_nife<-allmeta_nife%>%select(V1,V2,samples,contig_name,proteins,gene_length,gene_count,prokTPM,full_contig_name,contig_length)%>%unique()
 write.csv(allmeta_nife,file="nife_hyddb_prokTPM.csv")
 
+library(data.table)
+setDT(allmeta_nife)
+allmeta_nife2<-allmeta_nife[, .(TPM = sum(prokTPM)), by = .(samples,V2)] 
+write.csv(allmeta_nife2,file="nife_hydd_groups_prokTPM.csv")
 
 ```
