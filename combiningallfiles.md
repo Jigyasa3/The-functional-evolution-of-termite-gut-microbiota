@@ -24,6 +24,8 @@ write.csv(cogs_contigs_1000above,file="tpm_cogs_allsamples_feb2021_1000bpscontig
 
 cogs_contigs_1000above2<-cogs_contigs%>%filter(contig_length>=1000 & read_count >=100 & TPM>=1) #get cogs present in contigs >1000bps and all the same filters applied to functionally annotated genes.
 write.csv(cogs_contigs_1000above2,file="tpm_cogs_allsamples_feb2021_1000bpscontigs_100counts1tpm.csv")
+
+##NOTE-Use "tpm_cogs_allsamples_feb2021_1000bpscontigs_100counts1pm_similartocontigs.csv" file for all statistical analysis. See "hpc_taxonomy.md" file for details.
 ```
 
 ### b) Generating the final functional annotation file-
