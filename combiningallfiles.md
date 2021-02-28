@@ -19,10 +19,11 @@ contigs<-contigs%>%select(contig_names,sample_names,contig_length)%>%unique()
 
 cogs_contigs<-merge(cogs,contigs,by.x=c("file_name","contig_names"),by.y=c("sample_names","contig_names"))
 cogs_contigs$contig_length<-as.numeric(as.character(cogs_contigs$contig_length))
-cogs_contigs_1000above<-cogs_contigs%>%filter(contig_length>=1000) #get cogs present in contigs >1000bps
-
+cogs_contigs_1000above<-cogs_contigs%>%filter(contig_length>=1000) #get cogs present in contigs >1000bps.
 write.csv(cogs_contigs_1000above,file="tpm_cogs_allsamples_feb2021_1000bpscontigs.csv")
 
+cogs_contigs_1000above2<-cogs_contigs%>%filter(contig_length>=1000 & read_count >=100 & TPM>=1) #get cogs present in contigs >1000bps and all the same filters applied to functionally annotated genes.
+write.csv(cogs_contigs_1000above2,file="tpm_cogs_allsamples_feb2021_1000bpscontigs_100counts1tpm.csv")
 ```
 
 ### b) Generating the final functional annotation file-
