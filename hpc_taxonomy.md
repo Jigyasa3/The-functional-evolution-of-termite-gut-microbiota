@@ -230,21 +230,83 @@ wc -l uniq-contignames.txt
 #in R
 module load R/3.6.1
 
-contigtaxa<-read.csv("allsamples-krakentaxonomy-feb2021.txt")
-cogtaxa<-read.csv("allcogs-allsamples-finalkrakenoutput.csv")
-tpm<-read.csv("all-samples-prokTPM.txt",sep="\t")
-tpm$fullproteinname<-paste(tpm$file_name,tpm$gene_name,sep="_")
+gtdb_taxonomy<-read.csv("allsamples-krakentaxonomy-feb2021.txt")
+gtdb_taxonomy$V1.y<-gsub("\\|","_",gtdb_taxonomy$V1.y)
+gtdb_taxonomy$phyla<-gsub("_c__.*$","",gtdb_taxonomy$V1.y)
+gtdb_taxonomy$class<-gsub("_o__.*$","",gtdb_taxonomy$V1.y)
+gtdb_taxonomy$order<-gsub("_f__.*$","",gtdb_taxonomy$V1.y)
+gtdb_taxonomy$family<-gsub("_g__.*$","",gtdb_taxonomy$V1.y)
 
-cogtaxa2<-merge(cogtaxa,tpm,by.x="V1.x",by.y="fullproteinname") #get contig info for each cog protein
-colnames(cogtaxa2)<-c("fullproteinname","markers","X.x","markertaxonomy","X.y","gene_name","gene_length","contig_name","gene_count","countbylength","file_name","fullnames")
+cog1<-read.csv("tpm_cogs_allsamples_feb2021_1000bpscontigs.csv") #the marker genes present in contigs >1000bps.
+cog1$markertaxonomy<-gsub("\\|","_",cog1$markertaxonomy)                      
+cog1$phyla<-gsub("_c__.*$","",cog1$markertaxonomy)                            
+cog1$class<-gsub("_o__.*$","",cog1$markertaxonomy)
+cog1$order<-gsub("_f__.*$","",cog1$markertaxonomy)
+cog1$family<-gsub("_g__.*$","",cog1$markertaxonomy)
 
-cogtaxa_contigtaxa2<-merge(cogtaxa2,contigtaxa,by.x=c("fullnames","markertaxonomy"),by.y=c("V1.x","V1.y")) #join by common contigname and taxonomy
+#joining at phyla level
+gtdb_cog1_phyla<-merge(cog1,gtdb_taxonomy,by.x=c("fullnames","phyla"),by.y=c("V1.x","phyla"))
+nrow(gtdb_cog1_phyla)
+[1] 65818
+nrow(cog1)
+[1] 84463
 
-nrow(cogtaxa_contigtaxa2)
-[1] 81964
-> nrow(cogtaxa2)
-[1] 147364
+#joining at class level
+gtdb_cog1_class<-merge(cog1,gtdb_taxonomy,by.x=c("fullnames","class"),by.y=c("V1.x","class"))
+nrow(gtdb_cog1_class)
+[1] 64575
+nrow(cog1)
+[1] 84463
 
+#joining at order level
+gtdb_cog1_order<-merge(cog1,gtdb_taxonomy,by.x=c("fullnames","order"),by.y=c("V1.x","order"))
+nrow(gtdb_cog1_order)
+[1] 57970
+nrow(cog1)
+[1] 84463
+
+#joining at family level
+gtdb_cog1_family<-merge(cog1,gtdb_taxonomy,by.x=c("fullnames","family"),by.y=c("V1.x","family"))
+nrow(gtdb_cog1_family)
+[1] 48008
+nrow(cog1)
+[1] 84463
+
+#---------------------------------------------------------------------------------------------------------------------------------------------------
+cog2<-read.csv("tpm_cogs_allsamples_feb2021_1000bpscontigs_100counts1tpm.csv") #the marker genes with the same filters as functional genes.
+cog2$markertaxonomy<-gsub("\\|","_",cog2$markertaxonomy)                      
+cog2$phyla<-gsub("_c__.*$","",cog2$markertaxonomy)                            
+cog2$class<-gsub("_o__.*$","",cog2$markertaxonomy)
+cog2$order<-gsub("_f__.*$","",cog2$markertaxonomy)
+cog2$family<-gsub("_g__.*$","",cog2$markertaxonomy)
+
+#at family level-
+gtdb_cog2_family<-merge(cog2,gtdb_taxonomy,by.x=c("fullnames","family"),by.y=c("V1.x","family"))
+nrow(gtdb_cog2_family)
+[1] 17563
+nrow(cog2)
+[1] 31928
+
+write.csv(gtdb_cog2_family,file="tpm_cogs_allsamples_feb2021_1000bpscontigs_100counts1pm_similartocontigs.csv")
+#-------------------------------------------------------------------------------------------------------------------------------------------------------
+##how many marker genes are present on single contigs that donot match GTDB contig annotation?
+cog2_notgtdb<-anti_join(cog2, gtdb_cog2_family, by=c("fullnames","family")) #markers on same contigs
+#write.csv(cog2_notgtdb,file="cog2_notgtdbcontigs.csv")
+nrow(cog2_notgtdb)
+[1] 14365
+nrow(cog2)
+[1] 31928
+14365/31928*100
+[1] 44.99186
+
+samecontigs<-merge(cog2_notgtdb,gtdb_cog2_family,by="fullnames")
+> nrow(samecontigs)
+[1] 13438
+13438/14365*100
+[1] 93.54682
+
+##NOTE- At family level taxonomic annotation, 55% of marker gene taxonomy matches the GTDB contig taxonomy. Out of 44% that donot match, 99% of this 44% are present on the same contig as the ones that do match, making their presence redundant i.e. only 1% of data is lost.
+Use "tpm_cogs_allsamples_feb2021_1000bpscontigs_100counts1pm_similartocontigs.csv" file for all statistical analysis.
 
 ```
 
