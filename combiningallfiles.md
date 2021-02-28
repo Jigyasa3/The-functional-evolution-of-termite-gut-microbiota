@@ -85,7 +85,28 @@ write.csv(joined3,file="all-metagenome-annotation-taxonomy-5000bps.txt")
 setDT(joined3)
 joined3_genes<-joined3[, .(TPM = sum(prokTPM)), by = .(samplename,annotation)]
 write.csv(joined3_genes,file="5000bps_genes.txt")
+```
 
+## c.1) Adding prokTPM to NiFe and FeFe hydrogenases catalytic subunits annotated by Hyddb-
+
+```
+joined1<-read.csv("/bucket/BourguignonU/Jigs_backup/working_files/AIMS/paper1/markergenes/markers-rpkm/individualanalysis_feb2021/all-metagenome-annotation-taxonomy-1000bps_feb2021.txt")
+
+#FeFe hydrogenases
+fefe<-read.csv("/bucket/BourguignonU/Jigs_backup/working_files/AIMS/paper1/bin_taxonomy/all_my_bins/prokka_output/all_faa/pathways/hydrogenases/metagenome_contigs/evalue30_cutoff/2-fefe-hyddb-results.csv",header=FALSE,sep=",")
+
+allmeta_fefe<-merge(fefe,allmeta,by.x="V1",by.y="fullproteinnames")
+allmeta_fefe<-allmeta_fefe%>%select(V1,V2,samples,contig_name,proteins,annotation,gene_length,gene_count,prokTPM,full_contig_name,contig_length)%>%unique()
+
+write.csv(allmeta_fefe,file="fefe_hyddb_prokTPM.csv")
+
+#NiFe hydrogenases
+nife<-read.csv("/bucket/BourguignonU/Jigs_backup/working_files/AIMS/paper1/bin_taxonomy/all_my_bins/prokka_output/all_faa/pathways/hydrogenases/metagenome_contigs/evalue30_cutoff/2-nife-hyddb-results.csv",header=FALSE,sep=",")
+
+allmeta_nife<-merge(nife,allmeta,by.x="V1",by.y="fullproteinnames")
+allmeta_nife<-allmeta_nife%>%select(V1,V2,samples,contig_name,proteins,annotation,gene_length,gene_count,prokTPM,full_contig_name,contig_length)%>%unique()
+
+write.csv(allmeta_nife,file="nife_hyddb_prokTPM.csv")
 
 
 ```
