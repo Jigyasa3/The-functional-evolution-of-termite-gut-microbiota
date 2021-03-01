@@ -230,7 +230,7 @@ wc -l uniq-contignames.txt
 #in R
 module load R/3.6.1
 
-gtdb_taxonomy<-read.csv("allsamples-krakentaxonomy-feb2021.txt")
+gtdb_taxonomy<-read.csv("allsamples-krakentaxonomy-feb2021.txt") #contig taxonomy file
 gtdb_taxonomy$V1.y<-gsub("\\|","_",gtdb_taxonomy$V1.y)
 gtdb_taxonomy$phyla<-gsub("_c__.*$","",gtdb_taxonomy$V1.y)
 gtdb_taxonomy$class<-gsub("_o__.*$","",gtdb_taxonomy$V1.y)
@@ -244,12 +244,14 @@ cog1$class<-gsub("_o__.*$","",cog1$markertaxonomy)
 cog1$order<-gsub("_f__.*$","",cog1$markertaxonomy)
 cog1$family<-gsub("_g__.*$","",cog1$markertaxonomy)
 
+##Examine similarity in taxonomic annotation at phyla, class, order and family level annotation-
 #joining at phyla level
 gtdb_cog1_phyla<-merge(cog1,gtdb_taxonomy,by.x=c("fullnames","phyla"),by.y=c("V1.x","phyla"))
 nrow(gtdb_cog1_phyla)
 [1] 65818
 nrow(cog1)
 [1] 84463
+77.92% of taxonomic annotation match at phyla level.
 
 #joining at class level
 gtdb_cog1_class<-merge(cog1,gtdb_taxonomy,by.x=c("fullnames","class"),by.y=c("V1.x","class"))
@@ -257,6 +259,7 @@ nrow(gtdb_cog1_class)
 [1] 64575
 nrow(cog1)
 [1] 84463
+76.45% of taxonomic annotation match at class level.
 
 #joining at order level
 gtdb_cog1_order<-merge(cog1,gtdb_taxonomy,by.x=c("fullnames","order"),by.y=c("V1.x","order"))
@@ -264,6 +267,7 @@ nrow(gtdb_cog1_order)
 [1] 57970
 nrow(cog1)
 [1] 84463
+68.63% of taxonomic annotation match at order level.
 
 #joining at family level
 gtdb_cog1_family<-merge(cog1,gtdb_taxonomy,by.x=c("fullnames","family"),by.y=c("V1.x","family"))
@@ -271,9 +275,17 @@ nrow(gtdb_cog1_family)
 [1] 48008
 nrow(cog1)
 [1] 84463
+56.83% of taxonomic annotation match at family level.
 
-#---------------------------------------------------------------------------------------------------------------------------------------------------
-cog2<-read.csv("tpm_cogs_allsamples_feb2021_1000bpscontigs_100counts1tpm.csv") #the marker genes with the same filters as functional genes.
+NOTE-There is ~77.92% similarity between the contig annotation and marker gene annotation files.
+
+
+```
+
+## Check4- Where are the differences between the GTDB contig and GTDB markergene annotation files present?
+
+```
+cog2<-read.csv("tpm_cogs_allsamples_feb2021_1000bpscontigs_100counts1tpm.csv") #the marker genes with the same filters as functional genes. Subset of cog1 file used in Check3.
 cog2$markertaxonomy<-gsub("\\|","_",cog2$markertaxonomy)                      
 cog2$phyla<-gsub("_c__.*$","",cog2$markertaxonomy)                            
 cog2$class<-gsub("_o__.*$","",cog2$markertaxonomy)
@@ -286,27 +298,52 @@ nrow(gtdb_cog2_family)
 [1] 17563
 nrow(cog2)
 [1] 31928
-
+55.00% of markers match the GTDB contig taxonomy.
 write.csv(gtdb_cog2_family,file="tpm_cogs_allsamples_feb2021_1000bpscontigs_100counts1pm_similartocontigs.csv")
-#-------------------------------------------------------------------------------------------------------------------------------------------------------
-##how many marker genes are present on single contigs that donot match GTDB contig annotation?
+
+
+##Examine how many marker genes donot match GTDB contig annotation?
 cog2_notgtdb<-anti_join(cog2, gtdb_cog2_family, by=c("fullnames","family")) #markers on same contigs
 #write.csv(cog2_notgtdb,file="cog2_notgtdbcontigs.csv")
 nrow(cog2_notgtdb)
 [1] 14365
 nrow(cog2)
 [1] 31928
-14365/31928*100
-[1] 44.99186
 
-samecontigs<-merge(cog2_notgtdb,gtdb_cog2_family,by="fullnames")
-> nrow(samecontigs)
+44.99% markers donot match the contig taxonomy.
+
+##Examine where are the unmatched markers present? Are they in the same contig as the markers that match the GTDB contig taxonomy?
+samecontigs<-merge(cog2_notgtdb,gtdb_cog2_family,by="fullnames") #merging markers file that match GTDB taxonomy to markers file that does not match.
+nrow(samecontigs)
 [1] 13438
-13438/14365*100
-[1] 93.54682
+nrow(cog2_notgtdb)
+[1] 14365
+93.54% of markers that donot match are still present on the same contigs as markers that do match.
 
-##NOTE- At family level taxonomic annotation, 55% of marker gene taxonomy matches the GTDB contig taxonomy. Out of 44% that donot match, 93% of this 44% are present on the same contig as the ones that do match, making their presence redundant i.e. only 7% of data is lost.
+NOTE- At family level taxonomic annotation, 55% of marker gene taxonomy matches the GTDB contig taxonomy. Out of 44% that donot match, 93% of this 44% are present on the same contig as the ones that do match, making their presence redundant i.e. only 7% of data is lost.
 Use "tpm_cogs_allsamples_feb2021_1000bpscontigs_100counts1pm_similartocontigs.csv" file for all statistical analysis.
 
 ```
 
+
+## Check5-Is there a relationship between length and no. of unmatched marker genes?
+
+```
+cogs2<-read.csv("tpm_cogs_allsamples_feb2021_1000bpscontigs_100counts1tpm.csv")
+cogs2_sub<-cogs2%>%select(gene_length,markers)
+
+jpeg(file="allcogs_lengthdistribution.jpeg")
+hist(cogs2_sub$gene_length)
+dev.off()
+
+cog2_notgtdb<-read.csv("cog2_notgtdbcontigs.csv")
+
+
+gtdb_cog2_family<-read.csv("tpm_cogs_allsamples_feb2021_1000bpscontigs_100counts1pm_similartocontigs.csv")
+gtdb_cog2_family_sub<-gtdb_cog2_family%>%select(gene_length,markers)
+jpeg(file="gtdbcogs_lengthdistribution.jpeg")                                 
+hist(gtdb_cog2_family_sub$gene_length)
+dev.off()
+
+
+```
