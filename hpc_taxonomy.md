@@ -305,7 +305,7 @@ samecontigs<-merge(cog2_notgtdb,gtdb_cog2_family,by="fullnames")
 13438/14365*100
 [1] 93.54682
 
-##NOTE- At family level taxonomic annotation, 55% of marker gene taxonomy matches the GTDB contig taxonomy. Out of 44% that donot match, 99% of this 44% are present on the same contig as the ones that do match, making their presence redundant i.e. only 1% of data is lost.
+##NOTE- At family level taxonomic annotation, 55% of marker gene taxonomy matches the GTDB contig taxonomy. Out of 44% that donot match, 93% of this 44% are present on the same contig as the ones that do match, making their presence redundant i.e. only 7% of data is lost.
 Use "tpm_cogs_allsamples_feb2021_1000bpscontigs_100counts1pm_similartocontigs.csv" file for all statistical analysis.
 
 ```
