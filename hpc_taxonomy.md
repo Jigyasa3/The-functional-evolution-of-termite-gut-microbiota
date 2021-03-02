@@ -331,13 +331,15 @@ Use "tpm_cogs_allsamples_feb2021_1000bpscontigs_100counts1pm_similartocontigs.cs
 ```
 cogs2<-read.csv("tpm_cogs_allsamples_feb2021_1000bpscontigs_100counts1tpm.csv")
 cogs2_sub<-cogs2%>%select(gene_length,markers)
-
 jpeg(file="allcogs_lengthdistribution.jpeg")
 hist(cogs2_sub$gene_length)
 dev.off()
 
 cog2_notgtdb<-read.csv("cog2_notgtdbcontigs.csv")
-
+cog2_notgtdb_sub<-cog2_notgtdb%>%select(gene_length,markers)
+jpeg(file="cog2_notgtdb_lengthdistribution.jpeg")
+hist(cog2_notgtdb$gene_length)
+dev.off()
 
 gtdb_cog2_family<-read.csv("tpm_cogs_allsamples_feb2021_1000bpscontigs_100counts1pm_similartocontigs.csv")
 gtdb_cog2_family_sub<-gtdb_cog2_family%>%select(gene_length,markers)
