@@ -1,0 +1,352 @@
+---
+title: "functional_taxonomy_cazymes"
+author: "Jigyasa_Arora"
+date: "2/28/2021"
+---
+
+```{r}
+library(dplyr)
+library(ape)
+library(tidyr)
+library(plyr)
+library(phytools)
+library(Information)
+
+```
+
+##Extracting out microbes performing CAZYmes in contigs above 5000bps-
+```{r}
+
+functions<-read.csv("uniq-all-metagenome-annotation-taxonomy-5000bps_feb2021.txt")
+functions$X<-NULL
+
+##extract out CAZYmes-
+functions<-functions%>%mutate(databases=ifelse(grepl("K", annotation),"KEGG",ifelse(grepl("hmm",annotation),"CAZY","PFAM")))
+
+functions2<-functions%>%filter(databases=="CAZY") 
+
+#check if there are no repeats in proteinIDs before summing-
+functions_prots<-functions2%>%select(fullproteinnames)
+functions_prots_uniq<-functions2%>%select(fullproteinnames)%>%unique()
+
+print(paste0("There are no duplicates in CAZYme annotations as ", nrow(functions_prots), "==", nrow(functions_prots_uniq)))
+
+#head(functions_prots$fullproteinnames[duplicated(functions_prots$fullproteinnames)],4)
+
+```
+
+##extract cazyme microbial functions-
+```{r}
+
+functions<-read.csv("uniq-all-metagenome-annotation-taxonomy-5000bps_feb2021.txt")
+functions$X<-NULL
+
+##extract out CAZYmes-
+functions<-functions%>%mutate(databases=ifelse(grepl("K", annotation),"KEGG",ifelse(grepl("hmm",annotation),"CAZY","PFAM")))
+
+functions2<-functions%>%filter(databases=="CAZY")
+
+functions2$V1.y<-gsub("\\|","_",functions2$V1.y)
+functions2$phyla<-gsub("_c__.*$","",functions2$V1.y)
+functions2$class<-gsub("_o__.*$","",functions2$V1.y)
+functions2$order<-gsub("_f__.*$","",functions2$V1.y)
+functions2$family<-gsub("_g__.*$","",functions2$V1.y)
+
+##get taxa of interest out-
+#functions$taxa_of_interest<-paste(functions$domain,functions$phyla,functions$class,functions$family,sep="_")
+
+functions2$taxa_of_interest<-functions2$phyla
+
+##get cazymes out-
+library(stringr)
+library(data.table)
+library(tidyr)
+
+
+
+##spread the data- per bacteria per cazyme-
+setDT(functions2)
+functions_microbegenes<-functions2[, .(TPM = sum(prokTPM)), by = .(samples,annotation,taxa_of_interest)]
+
+functions_microbegenes$annotation<-gsub(".hmm","",functions_microbegenes$annotation)
+functions_microbegenes$microbes_cazymes<-paste(functions_microbegenes$annotation,functions_microbegenes$taxa_of_interest,sep="__")
+
+functions_microbegenes<-functions_microbegenes%>%select(samples,microbes_cazymes,TPM)
+functions_microbegenes_spread<-as.data.frame(spread(functions_microbegenes,microbes_cazymes,TPM))
+
+
+##extract 124 samples of interest-
+tree<-read.tree("1000bps_taxonomy_124taxa_tree.nwk")
+d<-data.frame(label=tree$tip.label)
+d$runnumber<-unlist(lapply(strsplit(as.character(d$label),split="-"),"[",1))
+d$runnumber<-gsub("_","-",d$runnumber)
+
+functions_microbegenes_spread_121<-merge(functions_microbegenes_spread,d,by.x="samples",by.y="runnumber") #we get 121/124 samples
+
+##get sampleinfo-
+sampleinfo<-read.csv("sample_names_ids_withotherfactors_tomedit.2.csv")
+#"termite_tree_labels" column is the same as tip.labels.
+sampleinfo<-sampleinfo[match(tree$tip.label,sampleinfo$termite_tree_labels), ]
+rownames(sampleinfo)<-sampleinfo$termite_tree_labels
+
+write.csv(functions_microbegenes_spread_121,file="cazymes-metagenome-annotation-taxonomy-5000bps_121samples_feb2021.csv")
+```
+
+
+##transform the data and extract data present in >10% of samples in >3 termite species-
+```{r}
+
+functions_microbegenes_spread_121<-read.csv("cazymes-metagenome-annotation-taxonomy-5000bps_121samples_feb2021.csv",row.names = 1)
+
+clr_transform<-function(filename_spread2){ 
+library(propr)
+filename_spread2[is.na(filename_spread2)] <-0 #convert NA to zero
+rownames(filename_spread2)<-filename_spread2$label
+filename_spread2$label<-NULL
+filename_spread2$samples<-NULL
+#add psuedo counts to account for missing and not-present data-
+filename_spread2<-filename_spread2+0.65
+
+filename_propr<-propr(filename_spread2,metric="rho",ivar="clr")
+
+#creating a df with all the transformed pathways and metadata-
+filename_propr_df<-filename_propr@logratio
+
+return(filename_propr_df)
+}
+
+functions_microbegenes_clr<-clr_transform(functions_microbegenes_spread_121)
+
+##extract out GH enzymes only-
+library(stringr)
+functions_microbegenes_clr_gh<-functions_microbegenes_clr[str_detect(names(functions_microbegenes_clr), "GH")]
+
+
+##filters-
+above10perc_function<-function(filename){
+filename$label<-NULL 
+filename$samplename<-NULL 
+
+filename2<-filename #for filtering
+filename2[filename2 > 0] <- 1 
+filename2[filename2 <= 0] <-0
+filename_10perc<-filename2[colSums(filename2) > 13] 
+columns<-colnames(filename_10perc) 
+
+filename3<-filename%>%dplyr::select(columns)
+return(filename3)
+} #13/124=10%
+
+functions_microbegenes_clr_gh_above10<-above10perc_function(functions_microbegenes_clr_gh)
+
+morethan3taxa_functions<-function(filename){
+
+filename$label<-NULL
+filename$samplename<-NULL
+filename2<-filename
+filename2[filename2 > 0] <- 1
+filename2[filename2 <= 0] <-0
+filename_threeabove<-filename2[rowSums(filename2[,])>=3, ]
+rows<-rownames(filename_threeabove)
+
+filename3<-subset(filename, rownames(filename) %in% rows)
+
+return(filename3)
+} #>3 columns
+
+functions_microbegenes_clr_gh_above10_3above<-morethan3taxa_functions(functions_microbegenes_clr_gh_above10)
+functions_microbegenes_clr_gh_above10_3above$label<-rownames(functions_microbegenes_clr_gh_above10_3above)
+
+
+write.csv(functions_microbegenes_clr_gh_above10_3above,file="functional-annotation-5000abovecontigs-GHs.csv")
+
+
+##how many GH enzymes after filtering?
+##NOTE-After applying all the filters, 107samples with 209 columns
+functions_microbegenes_clr_gh_above10_3above_long<-gather(functions_microbegenes_clr_gh_above10_3above, microbetaxa, TPM, 1:209, factor_key=TRUE)
+functions_microbegenes_clr_gh_above10_3above_long$GH<-gsub("__.*$","",functions_microbegenes_clr_gh_above10_3above_long$microbetaxa)
+
+functions_microbegenes_clr_gh_above10_3above_long%>%select(GH)%>%group_by(GH)%>%count()%>%nrow()
+
+ghspresent<-functions_microbegenes_clr_gh_above10_3above_long%>%select(GH)%>%group_by(GH)%>%unique()%>%count()
+
+print(paste0("We have ", functions_microbegenes_clr_gh_above10_3above_long%>%select(GH)%>%group_by(GH)%>%count()%>%nrow()," GH enzymes in ", nrow(functions_microbegenes_clr_gh_above10_3above), " termite samples" ))
+
+#------------------------------------------------------------------------------------
+
+
+
+
+```
+
+##Extract lignocellulose degrading GHs only-<the final files for statistical analysis>
+```{r}
+
+genesubstrate<-read.csv("C:/Users/jigyasa-arora.OIST/Dropbox (OIST)/gut bacteria/metagenome analysis/new_stuff/bins/annotation/all_contig_taxonomy/itol_images/version2/lignocellulose substrates and GHs lit search.csv")
+
+ghspresent<-merge(ghspresent,genesubstrate,by.x="GH",by.y="GH.Family")
+
+#extract columns by partial match to GH names-
+functions_microbegenes_clr_gh_above10_3above2<-functions_microbegenes_clr_gh_above10_3above[grep("GH10__|GH11__|GH130__|GH5_4__|GH5_46__|GH30__|GH13__|GH3__|GH43__|GH45__|GH8__|GH1__|GH9__|GH16__", colnames(functions_microbegenes_clr_gh_above10_3above))]
+functions_microbegenes_clr_gh_above10_3above2$label<-rownames(functions_microbegenes_clr_gh_above10_3above2)
+
+write.csv(functions_microbegenes_clr_gh_above10_3above2,file="functional-annotation-5000abovecontigs-14GHs.csv")
+
+#get 107 termite tree file-
+tree<-read.tree("1000bps_taxonomy_124taxa_tree.nwk")
+d<-data.frame(label=tree$tip.label)
+
+tree_107<-keep.tip(tree,as.vector(functions_microbegenes_clr_gh_above10_3above2$label))
+write.tree(tree_107,file="1000bps_taxonomy_107taxa_tree.nwk")
+
+```
+
+## Moran's I and phyl.anova() on microbial groups of each CAZYme-
+```{r}
+
+#Moran's I phylogenetic autocorrelation with termite tree-
+tree<-read.tree("1000bps_taxonomy_107taxa_tree.nwk")
+
+functions<-read.csv("functional-annotation-5000abovecontigs-14GHs.csv",row.names = 1,header=TRUE)
+#functions$X<-NULL
+functions<-functions[match(tree$tip.label,rownames(functions)), ] #match with the tree
+
+library(adephylo)
+library(ape) 
+library(phylobase) 
+library(phylosignal) 
+ 
+
+functions[is.na(functions)] <-0 #convert any NA to zero
+functions<-functions[match(tree$tip.label,rownames(functions)), ]
+p4d <- phylo4d(tree,functions)
+p2<-phyloSignal(p4d = p4d, method = "I")
+
+
+##method1 for pvalue adjustment-
+#adjusted p-value using  fdr method-<p.adjust method>
+mod2 = as.data.frame(p2$pvalue)
+mod2$padjusted_lambda<-p.adjust(mod2$I, method='fdr')
+mod2$functions<-rownames(mod2)
+mod2<-mod2%>%dplyr::mutate(significance_padjusted=ifelse(padjusted_lambda<0.05,"*",""))
+mod2<-mod2%>%dplyr::mutate(significance_moranI=ifelse(I<0.05,"*",""))
+mod2$gh<-gsub("__.*$","",mod2$functions)
+
+genenames<-read.csv("C:/Users/jigyasa-arora.OIST/Dropbox (OIST)/gut bacteria/metagenome analysis/new_stuff/bins/annotation/all_contig_taxonomy/itol_images/version2/lignocellulose substrates and GHs lit search.csv")
+mod2<-merge(mod2,genenames,by.x="gh",by.y="GH.Family",all.x = TRUE)
+
+write.csv(mod2,file="phylogenetic_autocorrelation_functionalcazymes_107samples_feb2021.csv")
+
+
+##method2 for pvalue adjustment- <doesn't work with small dataset like ours>
+#library(fdrtool)
+#mod2 = as.data.frame(p2$pvalue)
+#mod2pvalue<-fdrtool(as.vector(mod2$I), statistic=c("normal"), plot=FALSE, color.figure=FALSE, #verbose=TRUE,  cutoff.method=c("locfdr"), pct0=0.75)
+
+#mod3<-as.data.frame(mod2pvalue$lfdr)
+#rownames(mod3)<-rownames(mod2)
+#colnames(mod3)<-c("localfdr")
+#mod3<-mod3%>%dplyr::mutate(significance=ifelse(localfdr<0.05,"*",""))
+#write.csv(mod3,file="phylogenetic_autocorrelation_cazymes_178columns_124samples_localFDR.csv")
+#-----------------------------------------------------------------------------
+#Phylogenetic anova
+tree<-read.tree("1000bps_taxonomy_107taxa_tree.nwk")
+
+functions<-read.csv("functional-annotation-5000abovecontigs-14GHs.csv",row.names = 1,header=TRUE)
+#individually-  running the function in a list of columns-
+functions$X<-NULL
+functions<-functions[match(tree$tip.label,rownames(functions)), ] #match the tree
+functions <-functions+1000 #add a constant to every value
+
+library(geomorph)
+phyl.anova.func2_list<-function(filename){
+filename<-as.data.frame(t(filename)) #convert row to column
+filename$label<-rownames(filename)
+geo_functions<-merge(filename,sampleinfo,by.x="label",by.y="termite_tree_labels")
+geo_functions$diet_type_number4<-as.factor(geo_functions$diet_type_number4)
+geo_functions[,2]<-as.numeric(geo_functions[,2])
+
+gdf <- geomorph.data.frame(abundance = geo_functions[,2], diet = as.factor(geo_functions$diet_type_number4), phy = tree) #create a dataframe that contains the data and phylogeny. [according to google forum]
+
+#group_name <- names(filename)[2] #get the correct column name. column 2 is the cazyme.
+
+geomorph.lm<-procD.lm(abundance ~ diet, iter=9999,RRPP=TRUE,effect.type = "F", SS.type = "II" ,data=gdf,print.progress = FALSE) #SS.type="II" is used if the groups (i.e. diet/lineage) are of uneven sizes.
+mod<-anova(geomorph.lm) #to examine if there is a phylogenetic correlation between "y" and "x"
+mod2<-as.data.frame(mod$table)
+mod2<-mod2[1,7]
+# d is distance between vector lengths is the difference in the amount of shape change per unit of size. If d is 0.05 i.e., | 0.20 - 0.15 |.  Why do this?  Two vectors can be correlated in direction - the way shape changes with size - but one group can exhibit more shape change per unit size than the other
+#D tells us the effect size of the standard deviation between two groups. Positive and above 0.2-0.3 means larger positive difference, while negative and below -0.2 to -0.3 means larger negative difference.
+
+pw<-pairwise(geomorph.lm,groups = as.factor(gdf$diet))
+pw_summary<-summary(pw,confidence=0.95,show.vectors = TRUE)
+pw_summary2<-as.data.frame(pw_summary$summary.table)
+
+pw_summary2$padjust<-p.adjust(pw_summary2$`Pr > d`,method="fdr") #fdr correction of p.value
+pw_summary2$diets<-rownames(pw_summary2)
+
+#convert the output to correct formats-
+names<-colnames(geo_functions[2])
+pw_summary2$genename<-rep(names,times=nrow(pw_summary2))
+library(tidyr)
+pw_summary3<-pw_summary2%>%dplyr::select("padjust","diets","genename")
+pw_spread<-pw_summary3%>%spread(diets,padjust)
+pw_spread2<-cbind(pw_spread,mod2)
+
+return(pw_spread2)
+}
+
+functions_t<-as.data.frame(t(functions))
+xy.list <-  split(functions_t, seq(nrow(functions_t))) #convert df to a list
+
+cazymes_geomorph<-lapply(xy.list,phyl.anova.func2_list) #apply on all columns
+
+cazymes_geomorph_df<-do.call(rbind.data.frame,cazymes_geomorph)
+
+
+#find p.adjust for anova-
+cazymes_geomorph_df$padjust<-p.adjust(cazymes_geomorph_df$mod2,method="fdr")
+cazymes_geomorph_df<-cazymes_geomorph_df%>%mutate(significant_mod2=ifelse(mod2 <=0.05,"*",""))
+cazymes_geomorph_df<-cazymes_geomorph_df%>%mutate(significant_anova=ifelse(padjust <=0.05,"*",""))
+cazymes_geomorph_df$gh<-gsub("__.*$","",cazymes_geomorph_df$genename)
+
+genenames<-read.csv("C:/Users/jigyasa-arora.OIST/Dropbox (OIST)/gut bacteria/metagenome analysis/new_stuff/bins/annotation/all_contig_taxonomy/itol_images/version2/lignocellulose substrates and GHs lit search.csv",header=FALSE) 
+cazymes_geomorph_df2<-merge(cazymes_geomorph_df,genenames,by.x="gh",by.y="V1",all.x = TRUE)
+
+write.csv(cazymes_geomorph_df2,file="Phylogenetic_anova_withdiet_functionalcazymes_107samples_feb2021.csv")
+
+
+```
+
+
+##relative abundance values(clr transformed + rawTPM) for each termite diet <TableS8 n Figure3A>-
+```{r}
+
+functions<-read.csv("functional-annotation-5000abovecontigs-14GHs.csv",row.names = 1,header=TRUE)
+functions$X<-rownames(functions)
+
+samples<-read.csv("sample_names_ids_withotherfactors_tomedit.2.csv")
+
+functions_diet<-merge(functions,samples,by.x="X",by.y="termite_tree_labels")
+functions_diet_long<-gather(functions_diet, gh_phyla, clr, 2:53, factor_key=TRUE)
+
+#sum by diet-
+library(data.table)
+setDT(functions_diet_long)
+functions_diet_summed<-functions_diet_long[, .(clr = sum(clr)), by = .(diet_type_number4,gh_phyla)]
+
+#convert to wide format-
+functions_diet_summed_wide<-spread(functions_diet_summed, gh_phyla, clr)
+write.csv(functions_diet_summed_wide,file="functional-annotation-5000abovecontigs-14GH-perdiet.csv")
+functions_diet_summed_wide_t<-t(functions_diet_summed_wide)%>%as.data.frame()
+functions_diet_summed_wide_t$genename<-rownames(functions_diet_summed_wide_t)
+
+#merge with phyl.anova results-
+phyl_anova<-read.csv("Phylogenetic_anova_withdiet_functionalcazymes_107samples_feb2021.csv")
+
+functions_diet_phylanova<-merge(functions_diet_summed_wide_t,phyl_anova,by="genename")
+write.csv(functions_diet_phylanova,file="functional-annotation-5000abovecontigs-phylanova.csv")
+#---------------------------------------------------------------------------------------------
+##FOR TABLE S8-
+
+##FOR FIGURE3A-
+```
