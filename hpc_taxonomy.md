@@ -326,26 +326,96 @@ Use "tpm_cogs_allsamples_feb2021_1000bpscontigs_100counts1pm_similartocontigs.cs
 ```
 
 
-## Check5-Is there a relationship between length and no. of unmatched marker genes?
+## Check5-Is there a relationship between length and no. of unmatched marker genes (in all three files)?
 
 ```
-cogs2<-read.csv("tpm_cogs_allsamples_feb2021_1000bpscontigs_100counts1tpm.csv")
-cogs2_sub<-cogs2%>%select(gene_length,markers)
-jpeg(file="allcogs_lengthdistribution.jpeg")
-hist(cogs2_sub$gene_length)
-dev.off()
+allcogs<-read.csv("tpm_cogs_allsamples_feb2021_1000bpscontigs_100counts1tpm.csv")
+library(dplyr)
 
-cog2_notgtdb<-read.csv("cog2_notgtdbcontigs.csv")
-cog2_notgtdb_sub<-cog2_notgtdb%>%select(gene_length,markers)
-jpeg(file="cog2_notgtdb_lengthdistribution.jpeg")
-hist(cog2_notgtdb$gene_length)
-dev.off()
+allcogs2<-allcogs%>%select(gene_length,markers)
 
-gtdb_cog2_family<-read.csv("tpm_cogs_allsamples_feb2021_1000bpscontigs_100counts1pm_similartocontigs.csv")
-gtdb_cog2_family_sub<-gtdb_cog2_family%>%select(gene_length,markers)
-jpeg(file="gtdbcogs_lengthdistribution.jpeg")                                 
-hist(gtdb_cog2_family_sub$gene_length)
-dev.off()
+#get mean length per marker
+library(data.table)
+setDT(allcogs2)
+allcogs_mean<-allcogs2[, .(mean_length = mean(gene_length)), by = .(markers)]
 
+#get no. of markers annotated
+allcogs_number<-allcogs2%>%select(markers)%>%group_by(markers)%>%count()
+
+#join two tables-
+allcogs_info<-merge(allcogs_mean,allcogs_number,by="markers")
+
+##do the same for a)markers that have same taxonomy as contigs ("tpm_cogs_allsamples_feb2021_1000bpscontigs_100counts1pm_similartocontigs.csv"), b)markers that dont ("cog2_notgtdbcontigs.csv")
+
+cogs_similar<-read.csv("tpm_cogs_allsamples_feb2021_1000bpscontigs_100counts1pm_similartocontigs.csv")
+cogs_similar2<-cogs_similar%>%select(gene_length,markers)
+setDT(cogs_similar2)
+cogssimilar_mean<-cogs_similar2[, .(mean_length = mean(gene_length)), by = .(markers)]
+cogssimilar_number<-cogs_similar2%>%select(markers)%>%group_by(markers)%>%count()
+cogssimilar_info<-merge(cogssimilar_mean,cogssimilar_number,by="markers")
+
+cogs_dif<-read.csv("cog2_notgtdbcontigs.csv")
+cogs_dif2<-cogs_dif%>%select(gene_length,markers)
+setDT(cogs_dif2)
+cogsdif_mean<-cogs_dif2[, .(mean_length = mean(gene_length)), by = .(markers)]
+cogsdif_number<-cogs_dif2%>%select(markers)%>%group_by(markers)%>%count()
+cogsdif_info<-merge(cogsdif_mean,cogsdif_number,by="markers")
+
+
+#correlations-
+res_allcogs<-cor.test(allcogs_info$mean_length, allcogs_info$n, method="pearson")
+[1] p-value = 5.809e-11
+res_cogssimilar<-cor.test(cogssimilar_info$mean_length, cogssimilar_info$n, method="pearson")
+[1] p-value = 7.257e-11
+res_cogsdif<-cor.test(cogsdif_info$mean_length, cogsdif_info$n, method="pearson")
+[1] p-value = 2.826e-06
+
+##NOTE- There is a correlation between marker-gene length and no. of markers in metagenomes.
+```
+
+## Check6- Is the marker-gene taxonomy correct? Comparison of KRAKEN2 GTDB taxonomy with the diamond blastp GTDB taxonomy-
+```
+#get all COG sequences for one sample <with most no. of KRAKEN2 markergene inconsistencies>
+R
+tpmall<-read.csv("tpm_cogs_allsamples_feb2021_1000bpscontigs_100counts1tpm.csv")
+
+library(dplyr)
+#check if there are no duplicates in the data, that will affect the counts-
+test<-tpmall%>%select(fullproteinnames)%>%unique
+nrow(test)
+[1] 31928
+nrow(tpmall)
+[1] 31928
+
+samples_all<-tpmall%>%select(file_name)%>%group_by(file_name)%>%count()
+
+tpmcontigs<-read.csv("tpm_cogs_allsamples_feb2021_1000bpscontigs_100counts1pm_similartocontigs.csv")
+samples_contigs<-tpmcontigs%>%select(file_name)%>%group_by(file_name)%>%count()
+
+samples_all_contigs<-merge(samples_all,samples_contigs,by="file_name")
+
+#get samples with >50% difference in marker-gene annotation between "ALL" vs "Matching to contigs"-
+samples_all_contigs$percdiff<-((samples_all_contigs$n.x-samples_all_contigs$n.y)/samples_all_contigs$n.x)*100
+
+samples_all_contigs%>%filter(percdiff >=50)%>%nrow()
+[1] 66
+samples_all_contigs%>%nrow()
+[1] 208
+
+#NOTE-sample chosen-230-12 <Microcerotermes>
+#---------------------------------------------------------------
+#use only those marker genes present in contigs >1000 bps
+tpmall_Microcero<-tpmall%>%filter(file_name=="230-12")
+nrow(tpmall_Microcero)
+[1] 177
+
+tpmall_Microcero<-tpmall_Microcero%>%select(fullproteinnames)
+write.csv(tpmall_Microcero,file="Microcerotermes_230-12_cogs_1000bpscontigs_100counts1tpm.csv")
+
+seqtk subseq all-230-12-Microcerotermes-cogs.fasta 2-Microcerotermes_230-12_cogs_1000bpscontigs_100counts1tpm.csv  > 230-12-Microcerotermes-1000bpscontigs_100counts1tpm.fasta
+#----------------------------------------------------------------
+# Diamond Blastp against the GTDB protein database-
+
+diamond blastp --db ${DB_DIR}/gtdb_decipher.faa.dmnd --query ${IN_DIR}/230-12-Microcerotermes-1000bpscontigs_100counts1tpm.fasta --outfmt 6 --out ${OUT_DIR}/gtdb-matches-230-12-Microcerotermes-1000bpscontigs_100counts1tpm.txt --threads 15
 
 ```
