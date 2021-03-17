@@ -1,0 +1,500 @@
+---
+title: "paper_figures.Rmd"
+author: "Jigyasa_Arora"
+date: "3/5/2021"
+---
+
+```{r}
+library(dplyr)
+library(ape)
+library(tidyr)
+library(data.table)
+```
+
+##Figure S2-
+```{r}
+#stacked box plot of marker gene taxonomy vs 16S-
+
+library(tidyr)
+taxa<-read.csv("taxonomy_16S_markers_others_clr_sorted.csv")
+
+tree<-read.tree("rna12-16S_concensus_may2020_newnames.nwk")
+tree2<-keep.tip(tree,as.vector(taxa$X))
+
+taxa_long<-gather(taxa, taxonomy, clr, 2:145, factor_key=TRUE)
+taxa_long$method<-unlist(lapply(strsplit(as.character(taxa_long$taxonomy),split="\\."),"[",1))
+taxa_long$taxonomy<-gsub("^.*Bacteria_","",taxa_long$taxonomy)
+taxa_long$taxonomy<-gsub("^.*Archaea_","",taxa_long$taxonomy)
+taxa_long$taxonomy<-gsub("^.*p__","",taxa_long$taxonomy)
+
+taxa_long$phyla<-gsub("_.*$","",taxa_long$taxonomy)
+
+#taxa_long$family<-gsub("^.*_", "", taxa_long$taxonomy) #get the last element from the string.
+
+#add sample info-
+sampleinfo<-read.csv("sample_names_ids_withotherfactors_tomedit.2.csv")
+
+taxa_long_info<-merge(taxa_long,sampleinfo,by.x="X",by.y="termite_tree_labels")
+taxa_long_info2<-taxa_long_info%>%filter(clr>0)
+taxa_long_info2$phyla<-gsub("s16.others","others",taxa_long_info2$phyla)
+taxa_long_info2$phyla<-gsub("markers.others","others",taxa_long_info2$phyla)
+
+#get the main phyla present-
+taxa_long_info2%>%select(phyla)%>%group_by(phyla)%>%count()
+#--------------------------------------
+##plot1-
+library(ggplot2)
+
+#colors used for microbial taxa-based on https://github.com/katiejolly/nationalparkcolors/blob/master/R/colors.R
+##BASED ON MAG TREE JAN2021-
+colors<-c(Euryarchaeota="#F6955E",Acidobacteriota="#2c5aa0", Actinobacteriota="#00aa88",Bacteroidota="#7c916f", Campylobacterota="#EC8FA3", Deferribacterota="#8C9D57",Elusimicrobiota="#4E5462", Firmicutes="#502d16",Fusobacteriota="#80792B",Myxococcota="#B23539",Planctomycetota="#008033",Proteobacteria="#916f7c",Fibrobacterota="#E79498",Spirochaetota="#d4aa00",Verrucomicrobiota="#548F01",Desulfobacterota="#A1045A",Gemmatimonadota="#40663F",Halobacterota="#d45500",Thermoplasmatota="#CD5733",Patescibacteria="#359F8B",Synergistota="#802729")
+
+dietnames<-c("1"="wood lower termites","2"="wood higher termites","3"="soil higher termites","5"="fungal-cultivating higher termites")
+
+#overall theme-
+addline_format <- function(x,...){
+    gsub('\\s','\n',x)
+}
+
+theme_set(theme_minimal() + theme(legend.position = "right", axis.title =  element_text(size = 20), axis.text =  element_text(size = 15), strip.text = element_text(size = 20)))
+
+
+p<-taxa_long_info2%>%filter(method=="s16")%>%ggplot( aes(fill=phyla, y=clr, x=as.factor(diet_type_number4))) + geom_bar(stat="identity",position="fill")+scale_fill_manual(values=colors,na.value="black")+scale_x_discrete(labels=addline_format(dietnames))+labs(y="Relative abundance of microbial phyla",x="Termite diet",title="16S")+theme(plot.title = element_text(hjust = 0.5))
+
+q<-taxa_long_info2%>%filter(method=="markers")%>%filter(!phyla=="Tenericutes")%>%ggplot( aes(fill=phyla, y=clr, x=as.factor(diet_type_number4))) + geom_bar(stat="identity",position="fill")+scale_fill_manual(values=colors,na.value="black")+scale_x_discrete(labels=addline_format(dietnames))+labs(y="Relative abundance of microbial phyla",x="Termite diet", title="Marker genes")+theme(plot.title = element_text(hjust = 0.5))
+
+library(ggpubr)
+figure <- ggarrange(p, q,
+                    labels = c("A", "B"),
+                    ncol = 2, nrow = 1,
+                    common.legend = TRUE, legend = "right")
+
+pdf(file="16S_markers_taxonomy_feb2021.pdf",height=8.5,width=13)
+figure
+dev.off()
+
+library(svglite)
+ggsave(file="16S_markers_taxonomy.svg", plot=figure, width=13, height=10)
+
+
+
+```
+
+
+##Figure 1-
+```{r}
+
+
+```
+
+##Figure 2-
+```{r} 
+#CAZYmes relative abundance-
+above1000_tpm_cazymes<-read.csv("cazymes_318columns_124samples_rawTPM_feb2021.csv",row.names = 1)
+above1000_tpm_cazymes$X<-rownames(above1000_tpm_cazymes)
+
+#removing zero contaning rows and columns-
+above1000_tpm_cazymes_long<-gather(above1000_tpm_cazymes, cazymes, TPM, 1:318, factor_key=TRUE)
+above1000_tpm_cazymes_long<-above1000_tpm_cazymes_long%>%filter(TPM>0)
+
+#spread the data back with no zero values-
+above1000_tpm_cazymes_nozero<- above1000_tpm_cazymes_long %>% spread(cazymes,TPM)
+rownames(above1000_tpm_cazymes_nozero)<-above1000_tpm_cazymes_nozero$X
+
+#get GHs only-
+above1000_tpm_cazymes_nozero<-select(above1000_tpm_cazymes_nozero,contains("GH")) #extract GHs only
+
+#get top 50 GHs out- (46/190)
+above50perc_function<-function(filename){
+filename[is.na(filename)] <-0
+filename2<-filename #for filtering
+filename2[filename2 > 0] <- 1 
+filename2[filename2 <= 0] <-0
+filename_10perc<-filename2[colSums(filename2) > 46] 
+columns<-colnames(filename_10perc) 
+
+filename3<-filename%>%dplyr::select(columns)
+return(filename3)
+}
+
+above1000_tpm_cazymes_nozero_top50<-above50perc_function(above1000_tpm_cazymes_nozero)
+
+#get samples with >5 GHs present-
+morethan5taxa_functions<-function(filename){
+#rownames(filename)<-filename$labels
+filename[is.na(filename)] <-0
+filename$labels<-NULL
+#filename$samplename<-NULL
+filename2<-filename
+filename2[filename2 > 0] <- 1
+filename2[filename2 <= 0] <-0
+filename_threeabove<-filename2[rowSums(filename2[,])>=5, ]
+filename_threeabove<-as.data.frame(filename_threeabove)
+rows<-rownames(filename_threeabove)
+
+filename3<-subset(filename, rownames(filename) %in% rows)
+
+return(filename3)
+}
+
+above1000_tpm_cazymes_nozero_top50_morethan5<-morethan5taxa_functions(above1000_tpm_cazymes_nozero_top50)
+above1000_tpm_cazymes_nozero_top50_morethan5$X<-rownames(above1000_tpm_cazymes_nozero_top50_morethan5)
+
+#sort by the tree-
+tree<-read.tree("rna12-16S_concensus_may2020_newnames.nwk")
+tips<-as.vector(rownames(above1000_tpm_cazymes_nozero_top50_morethan5))
+newtree<-keep.tip(tree,tips)
+write.tree(newtree,file="1000bps_taxonomy_112taxa_tree.nwk")
+
+above1000_tpm_cazymes_nozero_top50_morethan5<-above1000_tpm_cazymes_nozero_top50_morethan5[match(newtree$tip.label,rownames(above1000_tpm_cazymes_nozero_top50_morethan5)), ]
+
+
+#covert the TPM to percentage-
+setDT(above1000_tpm_cazymes_nozero_top50_morethan5)
+top50functions_112samples_perc<-above1000_tpm_cazymes_nozero_top50_morethan5[, lapply(.SD, function(x) (x)/10000), by = X, .SDcols = 1:52]
+top50functions_112samples_perc<-as.data.frame(top50functions_112samples_perc)
+rownames(top50functions_112samples_perc)<-top50functions_112samples_perc$X
+
+top50functions_112samples_perc<-top50functions_112samples_perc[match(newtree$tip.label,top50functions_112samples_perc$X), ]
+
+write.csv(top50functions_112samples_perc,file="top50GH_112samples_percTPM_feb2021.csv")
+
+#get the GH family function-
+morani<-read.csv("phylogenetic_autocorrelation_cazymes_153columns_122samples_jan2021.csv")
+top50gh<-colnames(top50functions_112samples_perc)%>%as.data.frame()
+colnames(top50gh)<-c("names")
+top50gh$names<-gsub(".hmm","",top50gh$names)
+
+top50gh_morani<-merge(top50gh,morani,by.x="names",by.y="functions",all.x=TRUE)
+
+top50gh_morani<-top50gh_morani%>%mutate(finalsig=ifelse(padjusted_lambda<0.05 & padjusted_lambda>0.01,"*",ifelse(padjusted_lambda<0.01 & padjusted_lambda>0.001,"**",ifelse(padjusted_lambda<0.001,"***","notsig"))))
+
+write.csv(top50gh_morani,file="top50gh_morani.csv")
+
+```
+
+
+##Figure 4A-
+```{r} 
+#get methanogenesis raw TPM-
+functions<-read.csv("functions-domainlevel-124samples-rawTPM-feb2021.csv",row.names=1) 
+mcr<-c("K00399","K00401","K00402")
+methanofunctions_mcr<-functions%>%select("Archaea_K00399","Archaea_K00401","Archaea_K00402")%>%rowSums(na.rm=TRUE)%>%as.data.frame()
+colnames(methanofunctions_mcr)<-c("mcr")
+methanofunctions_mcr$X<-rownames(methanofunctions_mcr)
+
+#select other metabolic genes raw TPM-
+functions2<-read.csv("allfunctions_rawTPM_124samples_genesnosubunit_hydrogenases.csv")
+rownames(functions2)<-functions2$X
+
+main_funcs<-read.csv("allbacterial_koids_metabolicgenes_nosubunits_jan2021.csv",header=FALSE) #genes with subunits have correct names in this file
+main_funcs$V1<-gsub(" ",".",main_funcs$V1) #match the column with colnames of file.
+
+mainfuncs_functions<-functions2%>%dplyr::select_if(names(.) %in% main_funcs$V1) #select the keggs out
+mainfuncs_functions$X<-rownames(mainfuncs_functions)
+
+allmetabolicfuncs<-merge(mainfuncs_functions,methanofunctions_mcr,by="X")
+write.csv(allmetabolicfuncs,file="allmetabolicfunctions_mcr_rawTPM_feb2021.csv")
+#-------------------------------------------------------------------------
+
+#get samples with >5 GHs present-
+morethan5taxa_functions<-function(filename){
+rownames(filename)<-filename$X
+filename[is.na(filename)] <-0
+filename$X<-NULL
+#filename$samplename<-NULL
+filename2<-filename
+filename2[filename2 > 0] <- 1
+filename2[filename2 <= 0] <-0
+filename_threeabove<-filename2[rowSums(filename2[,])>=5, ]
+filename_threeabove<-as.data.frame(filename_threeabove)
+rows<-rownames(filename_threeabove)
+
+filename3<-subset(filename, rownames(filename) %in% rows)
+
+return(filename3)
+}
+
+
+allmetabolicfuncs_above5<-morethan5taxa_functions(allmetabolicfuncs)
+allmetabolicfuncs_above5$X<-rownames(allmetabolicfuncs_above5)
+
+#sort by the tree-
+tree<-read.tree("rna12-16S_concensus_may2020_newnames.nwk")
+tips<-as.vector(allmetabolicfuncs_above5$X)
+newtree<-keep.tip(tree,tips)
+write.tree(newtree,file="1000bps_taxonomy_113taxa_tree.nwk")
+
+allmetabolicfuncs_above5<-allmetabolicfuncs_above5[match(newtree$tip.label,allmetabolicfuncs_above5$X), ]
+
+
+#covert the TPM to percentage-
+setDT(allmetabolicfuncs_above5)
+allmetabolicfuncs_above5_perc<-allmetabolicfuncs_above5[, lapply(.SD, function(x) (x)/10000), by = X, .SDcols = 1:26]
+allmetabolicfuncs_above5_perc<-as.data.frame(allmetabolicfuncs_above5_perc)
+rownames(allmetabolicfuncs_above5_perc)<-allmetabolicfuncs_above5_perc$X
+
+allmetabolicfuncs_above5_perc<-allmetabolicfuncs_above5_perc[match(newtree$tip.label,allmetabolicfuncs_above5_perc$X), ]
+
+write.csv(allmetabolicfuncs_above5_perc,file="allmetabolicfunctions_mcr_113samples_percTPM_feb2021.csv")
+
+#get the GH family function-
+morani<-read.csv("phylogenetic_autocorrelation_19etabolicgenes_nosubunit_124samples_feb2021.csv")
+genes<-colnames(allmetabolicfuncs_above5_perc)%>%as.data.frame()
+colnames(genes)<-c("names")
+
+
+genes_morani<-merge(genes,morani,by.x="names",by.y="functions",all.x=TRUE)
+
+genes_morani<-genes_morani%>%mutate(finalsig=ifelse(padjusted_lambda<0.05 & padjusted_lambda>0.01,"*",ifelse(padjusted_lambda<0.01 & padjusted_lambda>0.001,"**",ifelse(padjusted_lambda<0.001,"***","notsig"))))
+
+write.csv(genes_morani,file="metabolicgenes_morani.csv")
+
+```
+
+##Figure 4B-
+```{r}
+#clr transformed data used for statistical analysis-
+metabolicpathways<-read.csv("metabolic_pathways_ordered_clrtransformed_124samples_19genesnosubunits_feb2021.csv",row.names=1)
+metabolicpathways2<-read.csv("metabolic_pathways_ordered_clrtransformed_124samples_19genesnosubunits_feb2021.csv")
+
+#merge with sample info file-
+sampleinfo<-read.csv("sample_names_ids_withotherfactors_tomedit.2.csv")
+metabolicpathways2<-merge(metabolicpathways2,sampleinfo,by.x="X",by.y="termite_tree_labels")
+
+metabolicpathways2<-metabolicpathways2%>%mutate(color=ifelse(diet_type_number4=="1","#0a0a0a",ifelse(diet_type_number4=="2","#C0C0C0",ifelse(diet_type_number4=="3","#576573","#84a5c7"))))
+
+metabolicpathways2<-metabolicpathways2%>%mutate(shape=ifelse(diet_type_number4=="1","1",ifelse(diet_type_number4=="2","2",ifelse(diet_type_number4=="3","0","3"))))
+
+##figure-
+library(factoextra)
+res.pca <- prcomp(metabolicpathways, scale = TRUE)
+
+##PLOT-
+#wood-lower="#0a0a0a"
+#wood-higher="#C0C0C0"
+#soil="#576573"
+#fungal="#84a5c7"
+
+#method1-
+#install_github("vqv/ggbiplot")
+library(ggbiplot)
+
+theme_set(theme_minimal() + theme(legend.position = "right", axis.title =  element_text(size = 20), axis.text =  element_text(size = 15), strip.text = element_text(size = 20)))
+
+diets<-as.factor(metabolicpathways2$diet_type_number4)
+colors<-as.factor(metabolicpathways2$color)
+
+g <- ggbiplot(res.pca, choices=1:2, obs.scale = 1, var.scale = 1,varname.adjust = 5,varname.size=3) +geom_point(aes(shape = diets,stroke = 2,colour=colors), size = 3) #, color="white") 
+
+
+pdf("metabolicgenes_pca_from19columns.pdf", width=13, height=8.5)
+g
+dev.off()
+
+library(svglite)
+ggsave(file="pca_metabolicgenes_pca_feb2021.svg", plot=g, width=14, height=14)
+
+```
+
+
+##Figure 3-
+```{r}
+#raw TPM of contigs >5000bps-
+functional_taxonomy<-read.csv("cazymes-metagenome-annotation-taxonomy-5000bps_121samples_feb2021.csv")
+rownames(functional_taxonomy)<-functional_taxonomy$samples 
+ 
+#GHs to examine-
+functions_microbegenes_clr_gh_above10_3above2<-read.csv("functional-annotation-5000abovecontigs-14GHs.csv")
+
+#extract the microbial groups + termite samples used in stats for contigs >5000bps-
+microbes<-colnames(functions_microbegenes_clr_gh_above10_3above2)
+microbes<-microbes[-1]
+functional_taxonomy_filtered<-functional_taxonomy[,microbes]
+functional_taxonomy_filtered$samples<-rownames(functional_taxonomy_filtered)
+
+samples<-functions_microbegenes_clr_gh_above10_3above2%>%select(X)
+samples$samples<-gsub("-.*$","",samples$X)
+samples$samples<-gsub("_","-",samples$samples)
+
+functional_taxonomy_filtered<-merge(functional_taxonomy_filtered,samples,by="samples")
+rownames(functional_taxonomy_filtered)<-functional_taxonomy_filtered$X
+
+#get termite samples with >5 samples-
+morethan5taxa_functions<-function(filename){
+rownames(filename)<-filename$X
+filename[is.na(filename)] <-0
+filename$X<-NULL
+filename$samples<-NULL
+filename2<-filename
+filename2[filename2 > 0] <- 1
+filename2[filename2 <= 0] <-0
+filename_threeabove<-filename2[rowSums(filename2[,])>=5, ]
+filename_threeabove<-as.data.frame(filename_threeabove)
+rows<-rownames(filename_threeabove)
+
+filename3<-subset(filename, rownames(filename) %in% rows)
+
+return(filename3)
+}
+
+functional_taxonomy_filtered_above5<-morethan5taxa_functions(functional_taxonomy_filtered)
+
+#covert the TPM to percentage-
+functional_taxonomy_filtered_above5$X<-rownames(functional_taxonomy_filtered_above5)
+setDT(functional_taxonomy_filtered_above5)
+functional_taxonomy_filtered_perc<-functional_taxonomy_filtered_above5[, lapply(.SD, function(x) (x)/10000), by = X, .SDcols = 1:52]
+functional_taxonomy_filtered_perc<-as.data.frame(functional_taxonomy_filtered_perc)
+rownames(functional_taxonomy_filtered_perc)<-functional_taxonomy_filtered_perc$X
+
+tree<-read.tree("1000bps_taxonomy_107taxa_tree.nwk")
+newtree<-keep.tip(tree,as.vector(functional_taxonomy_filtered_perc$X))
+write.tree(newtree,file="1000bps_taxonomy_74taxa_tree.nwk")
+
+functional_taxonomy_filtered_perc<-functional_taxonomy_filtered_perc[match(newtree$tip.label,functional_taxonomy_filtered_perc$X), ]
+
+write.csv(functional_taxonomy_filtered_perc,file="functionaltaxonomy_74samples_percTPM_feb2021.csv")
+
+#get the GH family function-
+morani<-read.csv("phylogenetic_autocorrelation_functionalcazymes_107samples_feb2021.csv")
+
+morani<-morani%>%mutate(finalsig=ifelse(padjusted_lambda<0.05 & padjusted_lambda>0.01,"*",ifelse(padjusted_lambda<0.01 & padjusted_lambda>0.001,"**",ifelse(padjusted_lambda<0.001,"***","notsig"))))
+
+write.csv(morani,file="functionaltaxonomy_morani.csv")
+``` 
+
+##Figure 6-
+```{r}
+nif<-read.csv("C:/Users/jigyasa-arora.OIST/Dropbox (OIST)/gut bacteria/metagenome analysis/new_stuff/bins/annotation/all_contig_taxonomy/itol_images/version4/excelfiles_supplementary/nitrogenfixation_nifHDK_5000above_samecontigs.csv")
+nif$V1.y<-gsub(" ","",nif$V1.y)
+nif$lca<-gsub("^.*\\|","",nif$V1.y)
+nif$lca<-gsub(" ","",nif$lca)
+nif$phyla<-gsub("\\|c.*$","",nif$V1.y)
+nif$phyla<-gsub(" ","",nif$phyla)
+nif$taxaofinterest<-paste(nif$phyla,nif$lca,sep="__")
+nif$samples<-gsub(" ","",nif$samples)
+
+#sum nif genes together-
+nifgenes<-c("K02586","K02591","K02588")
+nif$nif<-nif%>%select("K02586","K02591","K02588")%>%rowSums(na.rm=TRUE)
+
+
+
+setDT(nif)
+nif_lca<-nif[, .(TPM = sum(nif)), by = .(samples,taxaofinterest)]
+
+#join by sample names-
+samples<-read.csv("sample_names_ids_withotherfactors_tomedit.2.csv")
+samples<-samples%>%select(samples,termite_tree_labels)
+nif_lca2<-merge(samples,nif_lca,by="samples")
+
+#spread by lca-
+nif_lca2$samples<-NULL
+nif_lca_spread<-as.data.frame(spread(nif_lca2,taxaofinterest,TPM))
+
+#get samples with more than one taxa-
+morethan1taxa_functions<-function(filename){
+rownames(filename)<-filename$termite_tree_labels
+filename[is.na(filename)] <-0
+filename$termite_tree_labels<-NULL
+#filename$samples<-NULL
+filename2<-filename
+filename2[filename2 > 0] <- 1
+filename2[filename2 <= 0] <-0
+filename_threeabove<-filename2[rowSums(filename2[,])>=1, ]
+filename_threeabove<-as.data.frame(filename_threeabove)
+rows<-rownames(filename_threeabove)
+
+filename3<-subset(filename, rownames(filename) %in% rows)
+
+return(filename3)
+}
+
+nif_lca_spread_above1<-morethan1taxa_functions(nif_lca_spread)
+
+#get taxa present in more than one sample-
+above1_function<-function(filename){
+  filename$termite_tree_labels<-NULL
+  filename$samplename<-NULL
+ 
+  filename2<-filename #for filtering
+  filename2[filename2 > 0] <- 1
+  filename2[filename2 <= 0] <-0
+  filename_10perc<-filename2[colSums(filename2) > 1]
+  columns<-colnames(filename_10perc)
+
+  filename3<-filename%>%dplyr::select(columns)
+  return(filename3)
+}
+
+nif_lca_spread_above1_morethan1<-above1_function(nif_lca_spread_above1)
+
+#covert the TPM to percentage-
+nif_lca_spread_above1_morethan1$termite_tree_labels<-rownames(nif_lca_spread_above1_morethan1)
+setDT(nif_lca_spread_above1_morethan1)
+nif_lca_spread_perc<-nif_lca_spread_above1_morethan1[, lapply(.SD, function(x) (x)/10000), by = termite_tree_labels, .SDcols = 1:7]
+nif_lca_spread_perc<-as.data.frame(nif_lca_spread_perc)
+rownames(nif_lca_spread_perc)<-nif_lca_spread_perc$termite_tree_labels
+
+tree<-read.tree("rna12-16S_concensus_may2020_newnames.nwk")
+newtree<-keep.tip(tree,as.vector(nif_lca_spread_perc$termite_tree_labels))
+write.tree(newtree,file="1000bps_taxonomy_36taxa_tree.nwk")
+
+nif_lca_spread_perc<-nif_lca_spread_perc[match(newtree$tip.label,nif_lca_spread_perc$termite_tree_labels), ]
+
+write.csv(nif_lca_spread_perc,file="nifcontigs_36samples_percTPM_feb2021.csv")
+
+
+```
+
+
+##Figure3B-
+```{r}
+cazymes<-read.csv("cazymes_153columns_122samples_clr_feb2021.csv")
+rownames(cazymes)<-cazymes$X
+cazymes<-read.csv("top50GH_112samples_percTPM_feb2021.csv")
+columns<-read.csv("top50GH_112samples_percTPM_feb2021.csv")
+columns<-as.vector(colnames(columns))
+
+cazymes2<-cazymes[,columns]
+#merge with sample info file-
+sampleinfo<-read.csv("sample_names_ids_withotherfactors_tomedit.2.csv")
+cazymes3<-merge(cazymes2,sampleinfo,by.x="X",by.y="termite_tree_labels")
+
+cazymes3<-cazymes3%>%mutate(color=ifelse(diet_type_number4=="1","#0a0a0a",ifelse(diet_type_number4=="2","#C0C0C0",ifelse(diet_type_number4=="3","#576573","#84a5c7"))))
+
+cazymes3<-cazymes3%>%mutate(shape=ifelse(diet_type_number4=="1","1",ifelse(diet_type_number4=="2","2",ifelse(diet_type_number4=="3","0","3"))))
+
+##figure-
+library(factoextra)
+rownames(cazymes2)<-cazymes2$X
+cazymes2$X<-NULL
+res.pca <- prcomp(cazymes2, scale = TRUE)
+
+##PLOT-
+#wood-lower="#0a0a0a"
+#wood-higher="#C0C0C0"
+#soil="#576573"
+#fungal="#84a5c7"
+
+#method1-
+#install_github("vqv/ggbiplot")
+library(ggbiplot)
+
+theme_set(theme_minimal() + theme(legend.position = "right", axis.title =  element_text(size = 20), axis.text =  element_text(size = 15), strip.text = element_text(size = 20)))
+
+diets<-as.factor(cazymes3$diet_type_number4)
+colors<-as.factor(cazymes3$color)
+
+g <- ggbiplot(res.pca, choices=1:2, obs.scale = 1, var.scale = 1,varname.adjust = 5,varname.size=2) +geom_point(aes(shape = diets,stroke = 2,colour=colors), size = 6) #, color="white") 
+
+
+pdf("cazymes_top50_pca.pdf", width=13, height=8.5)
+g
+dev.off()
+
+library(svglite)
+ggsave(file="cazymes_top50pca_feb2021.svg", plot=g, width=14, height=14)
+
+```
+

@@ -1,0 +1,78 @@
+---
+title: "supptables.Rmd"
+author: "Jigyasa_Arora"
+date: "3/4/2021"
+---
+
+##Table S7-
+```{r}
+
+cazymes<-read.csv("C:/Users/jigyasa-arora.OIST/Dropbox (OIST)/gut bacteria/metagenome analysis/new_stuff/bins/annotation/all_contig_taxonomy/itol_images/version4/excelfiles_supplementary/cazymes_phylogeneticanova_moranI.csv")
+
+cazymes<-cazymes%>%mutate(new1.02=ifelse(X1.02<0.05 & X1.02>0.01,"*",ifelse(X1.02<0.01 & X1.02>0.001,"**",ifelse(X1.02<0.001,"***","not-significant"))))
+cazymes<-cazymes%>%mutate(new1.03=ifelse(X1.03<0.05 & X1.03>0.01,"*",ifelse(X1.03<0.01 & X1.03>0.001,"**",ifelse(X1.03<0.001,"***","not-significant"))))
+cazymes<-cazymes%>%mutate(new1.05=ifelse(X1.05<0.05 & X1.05>0.01,"*",ifelse(X1.05<0.01 & X1.05>0.001,"**",ifelse(X1.05<0.001,"***","not-significant"))))
+cazymes<-cazymes%>%mutate(new2.03=ifelse(X2.03<0.05 & X2.03>0.01,"*",ifelse(X2.03<0.01 & X2.03>0.001,"**",ifelse(X2.03<0.001,"***","not-significant"))))
+cazymes<-cazymes%>%mutate(new2.05=ifelse(X2.05<0.05 & X2.05>0.01,"*",ifelse(X2.05<0.01 & X2.05>0.001,"**",ifelse(X2.05<0.001,"***","not-significant"))))
+cazymes<-cazymes%>%mutate(new3.05=ifelse(X3.05<0.05 & X3.05>0.01,"*",ifelse(X3.05<0.01 & X3.05>0.001,"**",ifelse(X3.05<0.001,"***","not-significant"))))
+
+write.csv(cazymes,file="C:/Users/jigyasa-arora.OIST/Dropbox (OIST)/gut bacteria/metagenome analysis/new_stuff/bins/annotation/all_contig_taxonomy/itol_images/version4/excelfiles_supplementary/2-cazymes_phylogeneticanova_moranI.csv")
+
+```
+
+##Table S8-
+```{r}
+cazymesmicrobes<-read.csv("C:/Users/jigyasa-arora.OIST/Dropbox (OIST)/gut bacteria/metagenome analysis/new_stuff/bins/annotation/all_contig_taxonomy/itol_images/version4/excelfiles_supplementary/functional-annotation-5000abovecontigs-phylanova.csv")
+
+cazymesmicrobes<-cazymesmicrobes%>%mutate(new1.02=ifelse(LT.vs.WF<0.05 & LT.vs.WF>0.01,"*",ifelse(LT.vs.WF<0.01 & LT.vs.WF>0.001,"**",ifelse(LT.vs.WF<0.001,"***","not-significant"))))
+cazymesmicrobes<-cazymesmicrobes%>%mutate(new1.03=ifelse(LT.vs.SF<0.05 & LT.vs.SF>0.01,"*",ifelse(LT.vs.SF<0.01 & LT.vs.SF>0.001,"**",ifelse(LT.vs.SF<0.001,"***","not-significant"))))
+cazymesmicrobes<-cazymesmicrobes%>%mutate(new1.05=ifelse(LT.vs.FC<0.05 & LT.vs.FC>0.01,"*",ifelse(LT.vs.FC<0.01 & LT.vs.FC>0.001,"**",ifelse(LT.vs.FC<0.001,"***","not-significant"))))
+cazymesmicrobes<-cazymesmicrobes%>%mutate(new2.03=ifelse(WF.vs.SF<0.05 & WF.vs.SF>0.01,"*",ifelse(WF.vs.SF<0.01 & WF.vs.SF>0.001,"**",ifelse(WF.vs.SF<0.001,"***","not-significant"))))
+cazymesmicrobes<-cazymesmicrobes%>%mutate(new2.05=ifelse(WF.vs.FC<0.05 & WF.vs.FC>0.01,"*",ifelse(WF.vs.FC<0.01 & WF.vs.FC>0.001,"**",ifelse(WF.vs.FC<0.001,"***","not-significant"))))
+cazymesmicrobes<-cazymesmicrobes%>%mutate(new3.05=ifelse(SF.vs.FC<0.05 & SF.vs.FC>0.01,"*",ifelse(SF.vs.FC<0.01 & SF.vs.FC>0.001,"**",ifelse(SF.vs.FC<0.001,"***","not-significant"))))
+
+write.csv(cazymesmicrobes,file="C:/Users/jigyasa-arora.OIST/Dropbox (OIST)/gut bacteria/metagenome analysis/new_stuff/bins/annotation/all_contig_taxonomy/itol_images/version4/excelfiles_supplementary/2-functional-annotation-5000abovecontigs-phylanova.csv")
+
+```
+
+
+##TableS11-
+```{r}
+metabolicgenes<-read.csv("C:/Users/jigyasa-arora.OIST/Dropbox (OIST)/gut bacteria/metagenome analysis/new_stuff/bins/annotation/all_contig_taxonomy/itol_images/version4/excelfiles_supplementary/19metabolicpathwaygenes_andmcr_nosubunit_124samples_feb2021.csv")
+
+metabolicgenes<-metabolicgenes%>%mutate(new1.02=ifelse(X1.02<0.05 & X1.02>0.01,"*",ifelse(X1.02<0.01 & X1.02>0.001,"**",ifelse(X1.02<0.001,"***","not-significant"))))
+metabolicgenes<-metabolicgenes%>%mutate(new1.03=ifelse(X1.03<0.05 & X1.03>0.01,"*",ifelse(X1.03<0.01 & X1.03>0.001,"**",ifelse(X1.03<0.001,"***","not-significant"))))
+metabolicgenes<-metabolicgenes%>%mutate(new1.05=ifelse(X1.05<0.05 & X1.05>0.01,"*",ifelse(X1.05<0.01 & X1.05>0.001,"**",ifelse(X1.05<0.001,"***","not-significant"))))
+metabolicgenes<-metabolicgenes%>%mutate(new2.03=ifelse(X2.03<0.05 & X2.03>0.01,"*",ifelse(X2.03<0.01 & X2.03>0.001,"**",ifelse(X2.03<0.001,"***","not-significant"))))
+metabolicgenes<-metabolicgenes%>%mutate(new2.05=ifelse(X2.05<0.05 & X2.05>0.01,"*",ifelse(X2.05<0.01 & X2.05>0.001,"**",ifelse(X2.05<0.001,"***","not-significant"))))
+metabolicgenes<-metabolicgenes%>%mutate(new3.05=ifelse(X3.05<0.05 & X3.05>0.01,"*",ifelse(X3.05<0.01 & X3.05>0.001,"**",ifelse(X3.05<0.001,"***","not-significant"))))
+
+write.csv(metabolicgenes,file="C:/Users/jigyasa-arora.OIST/Dropbox (OIST)/gut bacteria/metagenome analysis/new_stuff/bins/annotation/all_contig_taxonomy/itol_images/version4/excelfiles_supplementary/2-19metabolicpathwaygenes_andmcr_nosubunit_124samples_feb2021.csv")
+```
+
+##Table S1-
+```{r}
+#add prokaryotic mapped reads-
+prokmappedreads<-read.csv("prokaryotic_mappedreads.csv")
+
+#add all mapped reads >1000bps-
+allmappedreads<-read.csv("allmappedreads_above1000bpscontigs.csv",header=FALSE)
+
+#count of all prokaryotic contigs per sample-
+prokcount<-read.csv("prokcontigcount.csv",header=FALSE)
+
+
+s1<-read.csv("C:/Users/jigyasa-arora.OIST/Dropbox (OIST)/gut bacteria/metagenome analysis/new_stuff/bins/annotation/all_contig_taxonomy/itol_images/version4/excelfiles_supplementary/s1ver3.csv")
+
+s1_2<-merge(s1,prokmappedreads,by="samples")
+s1_3<-merge(s1_2,allmappedreads,by.x="samples",by.y="V1")
+s1_4<-merge(s1_3,prokcount,by.x="samples",by.y="V1")
+
+write.csv(s1_4,file="C:/Users/jigyasa-arora.OIST/Dropbox (OIST)/gut bacteria/metagenome analysis/new_stuff/bins/annotation/all_contig_taxonomy/itol_images/version4/excelfiles_supplementary/s1ver4.csv")
+
+
+
+
+
+```
+
