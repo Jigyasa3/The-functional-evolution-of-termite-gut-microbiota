@@ -41,23 +41,36 @@ while read line;do while read cogs;do cp ${line}/${cogs}*fna allfetchm_nucoutput
 
 ```
 
-### C) Based on https://github.com/Jigyasa3/termite_146guts_microbes_function/blob/main/standardization/taxonomy_standardization_krakenvsmeganvsblastp.md, use MEGAN for taxonomic analysis-
+### C) Based on https://github.com/Jigyasa3/termite_146guts_microbes_function/blob/main/standardization/taxonomy_standardization_krakenvsmeganvsblastp.md, use DIAMOND lca for taxonomic analysis-
 
 ```
-#a)
-diamond blastp --db ${DB_DIR}/nr.dmnd --query ${IN_DIR}/${file1} --outfmt 100 --out ${OUT_DIR}/nr-matches-${file1} --threads 15
-#--outfmt 100- DAA file output
+#method2: --query-cover 60
+awk '$2!=0 {print $0}' gtdb-lca-method2-matches-prot-all-COG0087.fasta.txt > output-gtdb-lca-method2-matches-prot-all-COG0087.fasta.txt
 
-#b)
-/home/j/jigyasa-arora/local/megan/tools/blast2rma --in ${file1} --format DAA --blastMode BlastP --out ${file1}.rma --minScore 140 --minReadLength 50 --maxExpected 1e-25 --minPercentIdentity 65 --lcaAlgorithm naive  --mapDB ${DB_DIR}/megan-map-Jan2021.db --threads 16 --verbose
-#--minScore 100
-#filters mainly used from http://megan.informatik.uni-tuebingen.de/t/missing-family-rank-in-blast2lca-output/577/5
-#--minReadLength 50 == trimmomatic results
+#-----------------------------------------------------------------------------------------------------------------------------------------
+##get the taxonomy per marker gene from DIAMOND blast output- 
+module load R/3.6.1
+Rscript gtdb_diamondlca.R gtdb_ver95_alllca_taxid.csv output-gtdb-lca-method1-matches-prot-all-COG0087.fasta.txt taxa-output-gtdb-lca-method1-matches-prot-all-COG0087.fasta.txt
 
-#c)
-/home/j/jigyasa-arora/local/megan/tools/rma2info --in ${file1} --read2class GTDB --paths --out meganoutput-${file1}.txt
-#based on http://megan.informatik.uni-tuebingen.de/t/missing-family-rank-in-blast2lca-output/577/5
-#--read2class gives GTDB taxonomy to each protein.
+#------------------------------------------------------------------------------------------------------------------------------------------
+<called as "gtdb_diamondlca.R">
+#USAGE- Rscript [taxaid] [blast] [output_file]
+
+args <- commandArgs(TRUE)
+taxaid <- args[1] #gtdb_ver95_alllca_taxid.csv file
+blast <- args[2]
+output_file <- args[3]
+
+taxa<-read.csv(file=taxaid,header=TRUE)
+taxa$X<-NULL
+
+blast<-read.csv(file=blast,header=FALSE,sep="\t")
+library(dplyr)
+blast2<-blast%>%filter(V3<=1e-24)
+
+#merge-
+taxa_blast<-merge(blast2,taxa,by.x="V2",by.y="taxID")
+write.csv(taxa_blast,file=output_file)
 
 
 ```
