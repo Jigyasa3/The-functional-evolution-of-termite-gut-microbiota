@@ -1,4 +1,4 @@
-## Compare different methods of marker-gene taxonomy annotation- KRAKEN2, manual Blastp and MEGAN using GTDB database
+## Compare different methods of marker-gene taxonomy annotation- KRAKEN2, manual Blastp, MEGAN using GTDB database and DIAMOND lca (outmft=102)
 
 ### A) MEGAN analysis- Which filters to use for contig annotation (blastx based)
 ```
@@ -159,4 +159,145 @@ nrow(joined_contig_phyla)
 
 ```
 
+### d)DIAMOND lca 
 
+```
+##standardize the parameters for DIAMOND lca-
+
+###CONTIGS-
+#method1: --sensitive --query-cover 60 --id 65 --evalue 1e-24
+awk '$2!=0 {print $0}' gtdb-lca-method1-matches-prot-all-COG0087.fasta.txt > output-gtdb-lca-method1-matches-prot-all-COG0087.fasta.txt
+
+#method2: --query-cover 60
+awk '$2!=0 {print $0}' gtdb-lca-method2-matches-prot-all-COG0087.fasta.txt > output-gtdb-lca-method2-matches-prot-all-COG0087.fasta.txt
+
+#------------------------------------------------------------------------------------------------------------------------------------------------------
+##creating the accession_to_taxid_taxonomy file in R-
+#NOTE- The final output is "gtdb_ver95_alllca_taxid.csv" which is used in all downstream analysis. This code doesn't have to be run
+
+module load R/3.6.1
+R
+alltaxonomy<-read.csv("/bucket/BourguignonU/Jigs_backup/working_files/work_backup_scripts_databases/230run_nomismatch_joinedfiles/230run_nomismatch_joinedfiles/taxonomy/gtdb_to_diamond/alltaxonomy_r95.tsv",header=FALSE,sep="\t")
+taxids<-read.csv("/apps/unit/BioinfoUgrp/DB/diamondDB/GTDB/r95/taxID_info.tsv",header=TRUE,sep="\t")
+
+#create taxonomy lca paths for each phylogenetic level-
+alltaxonomy$domain<-unlist(lapply(strsplit(as.character(alltaxonomy$V2),split=";"),"[",1))
+alltaxonomy$phyla<-unlist(lapply(strsplit(as.character(alltaxonomy$V2),split=";"),"[",2))
+alltaxonomy$class<-unlist(lapply(strsplit(as.character(alltaxonomy$V2),split=";"),"[",3))
+alltaxonomy$order<-unlist(lapply(strsplit(as.character(alltaxonomy$V2),split=";"),"[",4))
+alltaxonomy$family<-unlist(lapply(strsplit(as.character(alltaxonomy$V2),split=";"),"[",5))
+alltaxonomy$genus<-unlist(lapply(strsplit(as.character(alltaxonomy$V2),split=";"),"[",6))
+alltaxonomy$species<-unlist(lapply(strsplit(as.character(alltaxonomy$V2),split=";"),"[",7))
+
+#create lca-
+alltaxonomy$phylalca<-paste(alltaxonomy$domain,alltaxonomy$phyla,sep="_")
+alltaxonomy$orderlca<-paste(alltaxonomy$domain,alltaxonomy$phyla,alltaxonomy$class,alltaxonomy$order,sep="_")
+alltaxonomy$familylca<-paste(alltaxonomy$domain,alltaxonomy$phyla,alltaxonomy$class,alltaxonomy$order,alltaxonomy$family,sep="_")
+alltaxonomy$genuslca<-paste(alltaxonomy$domain,alltaxonomy$phyla,alltaxonomy$class,alltaxonomy$order,alltaxonomy$family,alltaxonomy$genus,sep="_")
+alltaxonomy$specieslca<-paste(alltaxonomy$domain,alltaxonomy$phyla,alltaxonomy$class,alltaxonomy$order,alltaxonomy$family,alltaxonomy$genus,alltaxonomy$species,sep="_")
+alltaxonomy$subsepecieslca<-gsub(";","_",alltaxonomy$V2)
+
+#get each path out as separate files-
+phylalca<-alltaxonomy%>%dplyr::select(phyla,phylalca)%>%unique()
+colnames(phylalca)<-c("name","lca")
+write.csv(phylalca,file="gtdb_ver95_phylalca.csv")
+
+classlca<-alltaxonomy%>%dplyr::select(class,classlca)%>%unique()
+colnames(classlca)<-c("name","lca")
+write.csv(classlca,file="gtdb_ver95_classlca.csv")
+
+orderlca<-alltaxonomy%>%dplyr::select(order,orderlca)%>%unique()
+colnames(orderlca)<-c("name","lca")
+write.csv(orderlca,file="gtdb_ver95_orderlca.csv")
+
+familylca<-alltaxonomy%>%dplyr::select(family,familylca)%>%unique()
+colnames(familylca)<-c("name","lca")
+write.csv(familylca,file="gtdb_ver95_familylca.csv")
+
+genuslca<-alltaxonomy%>%dplyr::select(genus,genuslca)%>%unique()
+colnames(genuslca)<-c("name","lca")
+write.csv(genuslca,file="gtdb_ver95_genuslca.csv")
+
+specieslca<-alltaxonomy%>%dplyr::select(species,specieslca)%>%unique()
+colnames(specieslca)<-c("name","lca")
+write.csv(specieslca,file="gtdb_ver95_specieslca.csv")
+
+subspecieslca<-alltaxonomy%>%dplyr::select(V1,subsepecieslca)%>%unique()
+colnames(subspecieslca)<-c("name","lca")
+write.csv(subspecieslca,file="gtdb_ver95_subspecieslca.csv")
+
+#get the final lca file-
+alllca<-rbind(phylalca,classlca,orderlca,familylca,genuslca,specieslca,subspecieslca)%>%as.data.frame()
+write.csv(alllca,file="gtdb_ver95_alllca.csv")
+
+#merge to taxid file-
+taxid<-read.csv("/apps/unit/BioinfoUgrp/DB/diamondDB/GTDB/r95/taxID_info.tsv",header=TRUE,sep="\t")
+taxid_taxa<-merge(taxid,taxa,by="name",all.x=TRUE)
+write.csv(taxid_taxa,file="gtdb_ver95_alllca_taxid.csv")
+
+##NOTE- nrow(alllca) == nrow(taxID_info.tsv) i.e. no. of elements completely match.
+
+#---------------------------------------------------------------------------
+##get the taxonomy per marker gene from DIAMOND blast output- 
+
+#to run-
+module load R/3.6.1
+Rscript gtdb_diamondlca.R gtdb_ver95_alllca_taxid.csv output-gtdb-lca-method1-matches-prot-all-COG0087.fasta.txt taxa-output-gtdb-lca-method1-matches-prot-all-COG0087.fasta.txt
+
+#---------------------------------------------------------------------------
+<called as "gtdb_diamondlca.R">
+#USAGE- Rscript [taxaid] [blast] [output_file]
+
+args <- commandArgs(TRUE)
+taxaid <- args[1] #gtdb_ver95_alllca_taxid.csv file
+blast <- args[2]
+output_file <- args[3]
+
+taxa<-read.csv(file=taxaid,header=TRUE)
+taxa$X<-NULL
+
+blast<-read.csv(file=blast,header=FALSE,sep="\t")
+library(dplyr)
+blast2<-blast%>%filter(V3<=1e-24)
+
+#merge-
+taxa_blast<-merge(blast2,taxa,by.x="V2",by.y="taxID")
+write.csv(taxa_blast,file=output_file)
+
+
+
+```
+
+
+```
+##comparison with other taxonomic methods-
+
+###CONTIGS-
+#NOTE- for the 3 contigs of sample 230-12, the taxonomic annotation of diamond lca (102 outfmt) is at a higher taxonomic level than MEGAN lca.
+#eg-
+#MEGAN output-
+230-12_NODE_61number61  GTDB;Bacteria;Firmicutes_A;Clostridia;Lachnospirales;Lachnospiraceae;
+230-12_NODE_59number59  GTDB;Bacteria;Spirochaetota;Spirochaetia;Treponematales;Treponemataceae_B;Treponema_E;
+230-12_NODE_189number189 GTDB;Bacteria;Fibrobacterota;Chitinivibrionia;Chitinivibrionales;Chitinispirillaceae;Chitinispirillum;Chitinispirillum alkaliphilum;Chitinispirillum alkaliphilum ACht6-1;
+
+#DIAMOND lca output-
+"230-12_NODE_61number61","d__Bacteria_p__Firmicutes_A_c__Clostridia"
+"230-12_NODE_59number59","d__Bacteria_p__Spirochaetota_c__Spirochaetia_o__Treponematales"
+"230-12_NODE_189number189","d__Bacteria_p__Fibrobacterota_c__Chitinivibrionia_o__Chitinivibrionales_f__Chitinispirillaceae"
+
+#BLASTp output and Blobtools-
+"230-12_NODE_61number61" has 3/6 proteins annotated at family level in BLASTp. So, class level LCA in diamond lca might be very unspecific(?!) BLASTp, MEGAN and Blobtools disagree at genus/family level for this contig. So maybe order level classification should have been used by diamond lca but instead class level is used.
+"230-12_NODE_59number59" has 5/5 proteins annotated at genus level in BLASTp. Blobtools annotates this contig at species level. MEGAN annotates the contig at genus level. So, order level LCA in diamond lca is not specific.
+"230-12_NODE_189number189" has 8/9 proteins annotated at genus level in BLASTp. MEGAN and Blobtools annotation are at species level. But BLASTp annotation does not match the other two methods (g_GUT77 vs Chitinispirillum alkaliphilum ACht6-1). So, family level LCA classification is good.
+
+##NOTE- DIAMOND lca is more stringent in its taxonomic classification thereby giving outputs at higher taxonomic levels (class, order and family). But the four methods cannot be dirrectly compared as MEGAN and Blobtools first blast the contigs to nr database and then map to GTDB database, while BLASTp is against proteins rather than contigs so it is using a different blast algorithm. 
+
+#four different diamond blast parameter combinations examined for contig data-
+--sensitive --query-cover 60 --id 65 --evalue 1e-24 : no result
+--query-cover 30 :no result
+--max-hsps 0 --evalue 1e-24 : gives results
+--max-hsps 0 --query-cover 30 : no results
+
+#"--max-hsps 0 --evalue 1e-24" parameter was chosen.
+
+```
