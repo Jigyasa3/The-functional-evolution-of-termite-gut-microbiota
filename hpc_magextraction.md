@@ -232,3 +232,63 @@ OUT_DIR3="/flash/BourguignonU/Jigs/gtdb/gtdb_mags/classify"
 
 
 ```
+
+## Extract out information from MAGs according to Minimum information about a single amplified genome (MISAG) and a metagenome-assembled genome (MIMAG) (Bowers et al 2017)
+```
+## extract rRNA sequences from each bin-
+module load hmmer/3.1b2
+module load ncbi-blast/2.7.1+
+module load mafft/7.305
+
+metaxa2 -i bin.1.fasta -o ${OUT_DIR}/metaxa2_bin.1 -f fasta --mode m --plus T
+#--plus T : to specify that blast+ is used
+
+
+#count of rRNA sequences per bin-
+awk -F, '{print FILENAME","$0}' metaxa2_bin.1.summary.txt > 2-metaxa2_bin.1.summary.txt #add filename to output file with sufix ".summary.txt"
+cat 2-metaxa2_*.summary.txt > all-metaxa2-bins.txt #concatenate them all
+
+#------------------------------------------------------------------------------------------------------------------------------------------
+##extract tRNA sequences from each bin-
+module load python/3.7.3
+file1="bin.1.fasta"
+tRNAscan-SE -B -o ${OUT_DIR}/trna-scan-${file1} -m ${OUT_DIR}/${file1}.stats ${file1}
+
+#-A : search for archaeal tRNAs
+#-B : bacterial tRNAs only
+#-G: use general tRNA model (cytoslic tRNAs from all 3 domains included)
+#-m : save statistics summary
+
+##NOTE- run tRNAscan with -A option for MAGs annotated as archaea.
+
+grep "Total tRNAs:" bin.1.fasta.stats.txt > output-bin.1.fasta.stats.txt #get the line containing the final count of tRNA in the MAG.
+cat output*.stats.txt > all-tRNAcounts-mags.txt #concatenate all the stats together in a file
+
+#--------------------------------------------------------------------------------------------------------------------------------------------
+##extract (a) total no. of contigs present in each MAG, (b) mean contig length, (c) maximum contig length for each MAG-
+
+(a)
+grep -c ">" named-301-92.bin.97.fasta > ../contig_stats/totalcount-named-301-92.bin.97.fasta.txt
+awk -F, '{print FILENAME","$0}' totalcount-named-301-92.bin.97.fasta.txt > 2-totalcount-named-301-92.bin.97.fasta.txt #add filename to the output file
+cat 2-totalcount-named-* > all-bins-totalcontigcount.txt
+
+
+for (b) and (c)
+module load emboss/6.6.0
+infoseq -auto -only -name -length named-301-92.bin.97.fasta > info-named-301-92.bin.97.fasta.txt
+
+(b)
+awk '{x+=$2; next} END{print x/NR}' info-named-301-92.bin.97.fasta.txt > mean-info-named-301-92.bin.97.fasta.txt #get mean value from column2.
+awk -F, '{print FILENAME","$0}' mean-info-named-301-92.bin.97.fasta.txt > 2-mean-info-named-301-92.bin.97.fasta.txt #add filename to the output file
+cat 2-mean-info-named-* > all-bins-meancontiglength.txt
+
+(c)
+awk 'NR==1{max = $2 + 0; next} {if ($2 > max) max = $2;} END {print max}' info-named-301-92.bin.97.fasta.txt > max-info-named-301-92.bin.97.fasta.txt #get max. value from column2.
+awk -F, '{print FILENAME","$0}' max-info-named-301-92.bin.97.fasta.txt > 2-max-info-named-301-92.bin.97.fasta.txt #add filename to the output file
+cat 2-max-info-named-* > all-bins-maxcontiglength.txt
+
+#---------------------------------------------------------------------------------------------------------------------------------------------
+##coverage of contigs assembled into MAGs-
+
+
+```
