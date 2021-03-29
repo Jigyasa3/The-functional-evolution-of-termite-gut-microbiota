@@ -73,3 +73,47 @@ hist(cov_gc$percgc, breaks=25, main="GC content histogram", xlab="GC content (%)
 dev.off()
 
 ```
+
+![](cov_gc_272-82-scatterplot_random10000contigs-page-001.jpg)
+
+
+
+### C)Overall distribution of GC among microbial taxa-using Blobtools
+```
+##diamond blobtools-
+diamond blastx --db ${DIAMONDDB}/gtdb.dmnd --query ${IN_DIR}/${file1} --outfmt 6 --out ${OUT_DIR}/gtdb-matches-${file1}.txt --sensitive --evalue 1e-25 --threads 15 --long-reads
+#--long-reads added as suggested by  http://megan.informatik.uni-tuebingen.de/t/problem-in-taxonomic-and-functional-annonation/1448
+#blastx is better because it is not restricted to annotated proteins in a contig
+#--evalue  1e-25 and --sensitive as suggested by https://blobtools.readme.io/docs/taxonomy-file
+
+##blobtools taxify-
+blobtools taxify --hit_file gtdb-matches-${file1}.txt --taxid_mapping_file /apps/unit/BioinfoUgrp/DB/diamondDB/GTDB/r95/taxdmp/accession2taxid.tsv --map_col_sseqid 1 --map_col_taxid 2 -o taxified-gtdb-matches-${file1}.txt
+
+##create a bamfile for the sample-
+samtools sort -o ${IN_DIR}/3contigs-230-12-gtdb-sorted.bam ${IN_DIR}/3contigs-230-12-gtdb.sam
+samtools index ${IN_DIR}/3contigs-230-12-gtdb-sorted.bam #index the bam file
+
+##blobtools create-
+blobtools create --infile ${IN_DIR}/${file1} --hitsfile ${IN_DIR}/taxified-gtdb-matches-${file3}.taxified.out --min_score 140 --nodes /apps/unit/BioinfoUgrp/DB/diamondDB/GTDB/r95/nodes.dmp --names /apps/unit/BioinfoUgrp/DB/diamondDB/GTDB/r95/names.dmp --bam ${IN_DIR}/3contigs-${file3}-gtdb-sorted.bam --calculate_cov --out ${file3}
+#--min_score 140 <same as megan>
+#evalue 1e-25 already used during diamond blast results.
+
+
+##blobtools view-
+#blobtools view --input 230-12-3contigs.blobDB.json --out 230-12-3contigs-view --rank all --cov
+
+##blobtools GC vs Coverage plot-
+blobtools plot -i 230-12-3contigs.blobDB.json --plotgroups 8 --length 1000 --noscale --rank phylum --format pdf --out plot-230-12-3contigs
+
+```
+
+```
+NOTE-There is GC bias in the sequenced data. Salmon software was applied to account for GC bias in microbial contigs.
+```
+
+
+![](plot-230-13.230-13.blobDB.json.bestsum.phylum.p8.span.1000.noscale.blobplot.bam0-page-001.jpg)
+![](plot-272-17.272-17.blobDB.json.bestsum.phylum.p8.span.1000.noscale.blobplot.bam0-page-001.jpg)
+![](plot-301-06.301-06.blobDB.json.bestsum.phylum.p8.span.1000.noscale.blobplot.bam0-page-001.jpg)
+
+
