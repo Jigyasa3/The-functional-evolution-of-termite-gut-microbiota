@@ -1,4 +1,4 @@
-Get Transcripts per million (TPM) per protein annotated as prokaryote based on GTDB taxonomy (hpc_taxonomy.md)
+Get Transcripts per million (TPM) per protein annotated as prokaryote based on GTDB taxonomy (hpc_taxonomy.md). This version of TPM calculation doesnot account for GC bias in data.
 
 ## TPM calculations for metagenome contigs
 
