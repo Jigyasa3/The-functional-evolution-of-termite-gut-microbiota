@@ -91,7 +91,7 @@ checkm lineage_wf -x fa -u 5 -m 5 --tab_table ${IN_DIR}/${file1}/concoct_bins ${
 
 ```
 
-## extract the 43-single copy marker genes 
+## extract the 43-single copy marker genes <script needs improvement!>
 
 ```
 #run "checkm_taxonomy.sh" script to get checkM marker genes out.
@@ -290,5 +290,14 @@ cat 2-max-info-named-* > all-bins-maxcontiglength.txt
 #---------------------------------------------------------------------------------------------------------------------------------------------
 ##coverage of contigs assembled into MAGs-
 
+#check if reads are unziped and renamed as READS_1.fastq and READS_2.fastq
+#for i in *-*;do mv ${i}/concoct_bins/checkm_output/ ${i};done #check if there are only *faa files in "concoct_bins" folder!
+BINS_FOLDER="/bucket/BourguignonU/Jigs_backup/working_files/AIMS/AIM3/concoct_bins_Nov2019/bins"
+OUT_DIR="/flash/BourguignonU/Jigs/binning/mag_coverage"
+CONTIG_DIR="/bucket/BourguignonU/Jigs_backup/working_files/AIMS/AIM2/tpm_functional_annotation/functional_annotation/all_prokka_outputs/all_contigs_Dec2019/contigs_withoutfilename"
+READS_DIR="/bucket/BourguignonU/Jigs_backup/working_files/AIMS/AIM3/concoct_bins_Nov2019/bins/reads"
 
+metawrap quant_bins -b ${BINS_FOLDER}/229-01/concoct_bins -o ${OUT_DIR}/229-01 -a ${CONTIG_DIR}/nofilename-229-01.fasta ${READS_DIR}/229-01_1.fastq ${READS_DIR}/229-01_2.fastq
+
+#"bin_abundance_table.tab" has the TPM coverage per bin per sample.
 ```
