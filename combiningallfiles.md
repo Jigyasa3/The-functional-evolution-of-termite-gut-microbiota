@@ -92,7 +92,7 @@ joined3_genes<-joined3[, .(TPM = sum(prokTPM)), by = .(samplename,annotation)]
 write.csv(joined3_genes,file="5000bps_genes.txt")
 ```
 
-### If there is "<NA>" in a column with factor variables in R-
+### If there is "\<NA>" in a column with factor variables in R-
 ```
 library(forcats) #https://stackoverflow.com/questions/39126537/replace-na-in-a-factor-column
 test$V7<-fct_explicit_na(test$V7, "0")
