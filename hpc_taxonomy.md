@@ -80,6 +80,7 @@ awk '$2!=0 {print $0}' gtdb-lca-method2-matches-prot-all-COG0087.fasta.txt > out
 #-----------------------------------------------------------------------------------------------------------------------------------------
 ##get the taxonomy per marker gene from DIAMOND blast output- 
 module load R/3.6.1
+tar -xvzf gtdb_ver95_alllca_taxid.csv.tar.gz
 Rscript gtdb_diamondlca.R gtdb_ver95_alllca_taxid.csv output-gtdb-lca-method1-matches-prot-all-COG0087.fasta.txt taxa-output-gtdb-lca-method1-matches-prot-all-COG0087.fasta.txt
 
 #------------------------------------------------------------------------------------------------------------------------------------------
