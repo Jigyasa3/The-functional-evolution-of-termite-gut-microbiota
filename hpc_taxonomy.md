@@ -44,7 +44,37 @@ while read line;do while read cogs;do cp ${line}/${cogs}*fna allfetchm_nucoutput
 ### C) Based on https://github.com/Jigyasa3/termite_146guts_microbes_function/blob/main/standardization/taxonomy_standardization_krakenvsmeganvsblastp.md, use DIAMOND lca for taxonomic analysis-
 
 ```
-#method2: --query-cover 60
+#!/bin/bash
+#SBATCH -p compute
+#SBATCH -t 3-0
+#SBATCH --mem=350G
+#SBATCH -e err_wood.%j
+
+#SBATCH --array 0
+#load the libraries-
+module load bioinfo-ugrp-modules
+module load DB/diamondDB/GTDB/r95
+module load DIAMOND/2.0.4.142
+
+#call the folders-
+IN_DIR="/bucket/BourguignonU/Jigs_backup/working_files/AIMS/AIM2/tpm_functional_annotation/functional_annotation/all_prokka_outputs/all_contigs_Dec2019"
+OUT_DIR="/flash/BourguignonU/Jigs/gtdb/gtdb_allcontigs"
+
+cd ${IN_DIR}/
+files=(filename-272-15.fasta)
+##echo "list: " ${files[${SLURM_ARRAY_TASK_ID}]} # this generates a list of $sf files
+file1=${files[${SLURM_ARRAY_TASK_ID}]} #it reads each index at a time
+#file2=${file1/filename-/}
+#file3=${file2/.fasta/}
+
+diamond blastx --db ${DIAMONDDB}/gtdb.dmnd --query ${IN_DIR}/${file1} --outfmt 102 --out ${OUT_DIR}/gtdb-lca-method2-matches-${file1}.txt --max-hsps 0 --evalue 1e-24 --threads 15
+#--max-hsps 0 : to get all best hits per query
+#--evalue 1e-24
+#--query-cover 60 was tested, but it is too stringent for termite microbiome that doesnt have a match in the database. the results were empty.
+
+#-------------------------------------------------------------------------------------------------------------------------------------
+#get the annotations that are not zero from the above script-
+
 awk '$2!=0 {print $0}' gtdb-lca-method2-matches-prot-all-COG0087.fasta.txt > output-gtdb-lca-method2-matches-prot-all-COG0087.fasta.txt
 
 #-----------------------------------------------------------------------------------------------------------------------------------------
