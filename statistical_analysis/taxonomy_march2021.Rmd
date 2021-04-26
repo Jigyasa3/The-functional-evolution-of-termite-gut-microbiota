@@ -1,0 +1,707 @@
+---
+title: "taxonomy analysis"
+author: "Jigyasa_Arora"
+date: "2/27/2021"
+---
+
+
+```{r}
+library(dplyr)
+library(ape)
+
+```
+
+## Applying the filters on marker-gene dataset (same as functional data)-
+```{r}
+taxonomy<-read.csv("taxonomy/all-cogs-taxonomy-contiginfo-tpm.csv",row.names = 1)
+#filter1-
+taxonomy_filters<-taxonomy%>%dplyr::filter(TPM>=1 & contig_length >=1000)
+#filter2-
+taxonomy_filters$domain<-gsub("_p__.*$","",taxonomy_filters$V3)
+taxonomy_filters2<-taxonomy_filters%>%dplyr::filter(domain %in% c("d__Bacteria","d__Archaea"))
+write.csv(taxonomy_filters2,file="taxonomy/all-cogs-taxonomy-contiginfo-tpm-filtered.csv")
+```
+
+## taxonomic analysis by marker gene data- Do all marker genes present on the same contig have similar taxonomic annotation + remove the mismatches
+```{r}
+  
+taxonomy_ver2<-read.csv("taxonomy/all-cogs-taxonomy-contiginfo-tpm-filtered.csv",row.names = 1) #markers present in contigs >=1000 bps and >=1TPM, similar to functional data.
+colnames(taxonomy_ver2)<-c("fullproteinnames","annotation","taxonomy","contig_names","samples","gene_names","full_contig_names","contig_length","TPM","NumReads","domain")
+taxonomy_ver2$fullnames<-paste(taxonomy_ver2$samples,taxonomy_ver2$contig_names,sep="_")
+
+##do we have duplicates in COG protein annotations? 
+taxonomy_ver2_proteins<-taxonomy_ver2%>%select(fullproteinnames)%>%unique()
+nrow(taxonomy_ver2)
+nrow(taxonomy_ver2_proteins)
+
+print(paste0("There are no duplicates in the data as no. of proteins is same in both files ",nrow(taxonomy_ver2) , " = ", nrow(taxonomy_ver2_proteins)))
+
+##do markers present on the same contig have similar taxonomic annotation?
+taxonomy_contigs<-taxonomy_ver2%>%select(fullnames)%>%group_by(fullnames)%>%count()
+
+print(paste0(taxonomy_contigs%>%filter(n>1)%>%nrow()/nrow(taxonomy_contigs)*100, "% of markers are present on the same contig"))
+
+
+
+print(paste0(taxonomy_contigs%>%filter(n==2)%>%nrow()/taxonomy_contigs%>%filter(n>1)%>%nrow()*100, "% of 28.20% have two markers per contigs"))
+print(paste0(taxonomy_contigs%>%filter(n==3)%>%nrow()/taxonomy_contigs%>%filter(n>1)%>%nrow()*100, "% of 28.20% have three markers per contigs"))
+print(paste0(taxonomy_contigs%>%filter(n==4)%>%nrow()/taxonomy_contigs%>%filter(n>1)%>%nrow()*100, "% of 28.20% have four markers per contigs"))
+print(paste0(taxonomy_contigs%>%filter(n>=5)%>%nrow()/taxonomy_contigs%>%filter(n>1)%>%nrow()*100, "% of 28.20% have five or more markers per contigs"))
+
+#----------------------------------------------------------------------------------------------------------
+##Example-for contigs with 2 marker genes-<dont have to run this step, its for standardization>
+taxonomy_contigs2<-taxonomy_contigs%>%filter(n==2)
+taxonomy_ver2_contigtaxa<-taxonomy_ver2%>%select(fullnames,taxonomy)%>%filter(fullnames %in% taxonomy_contigs2$fullnames) #extract markers present on same contigs
+
+taxonomy_ver2_contigtaxa$phyla<-gsub("_c__.*$","",taxonomy_ver2_contigtaxa$taxonomy)
+
+taxonomy_ver2_contigtaxa$class<-gsub("_o__.*$","",taxonomy_ver2_contigtaxa$taxonomy)
+
+taxonomy_ver2_contigtaxa$order<-gsub("_f__.*$","",taxonomy_ver2_contigtaxa$taxonomy)
+
+taxonomy_ver2_contigtaxa$family<-gsub("_g__.*$","",taxonomy_ver2_contigtaxa$taxonomy)
+
+
+library(data.table)
+setDT(taxonomy_ver2_contigtaxa)
+taxonomy_contigs_family<-as.data.table(taxonomy_ver2_contigtaxa)[, toString(family), by = list(fullnames)]
+taxonomy_contigs_family2<-setDT(taxonomy_contigs_family)[, paste0("family", 1:2) := tstrsplit(V1, ",")]
+
+
+head(taxonomy_contigs_family2,5) 
+
+taxonomy_contigs_family2$family1<-gsub(" ","",taxonomy_contigs_family2$family1)
+taxonomy_contigs_family2$family2<-gsub(" ","",taxonomy_contigs_family2$family2)
+
+taxonomy_contigs_family2<-taxonomy_contigs_family2%>%mutate(sametaxonomy=ifelse(family1==family2,"TRUE","FALSE"))
+taxonomy_contigs_family2%>%filter(sametaxonomy=="TRUE")%>%nrow() 
+
+print(paste0( taxonomy_contigs_family2%>%filter(sametaxonomy=="TRUE")%>%nrow()/nrow(taxonomy_contigs_family2)*100, "% of two markers have identical taxonomic annotation at family level when they are present on the same contig."))
+
+#do the non-identical ones match at phyla level?
+taxonomy_contigs_family3<-taxonomy_contigs_family2%>%filter(sametaxonomy=="FALSE")
+taxonomy_contigs_family3$family1_phyla<-gsub("_c__.*$","",taxonomy_contigs_family3$family1)
+taxonomy_contigs_family3$family2_phyla<-gsub("_c__.*$","",taxonomy_contigs_family3$family2)
+
+taxonomy_contigs_family3<-taxonomy_contigs_family3%>%mutate(samephyla=ifelse(family1_phyla==family2_phyla,"TRUE","FALSE"))
+taxonomy_contigs_family3%>%filter(samephyla=="FALSE")%>%nrow() 
+
+#removing the marker-genes that are present on the same contig yet have different taxonomic annotation-
+
+contigstoextract<-taxonomy_contigs_family3%>%filter(samephyla=="FALSE")%>%select(fullnames)
+
+print(paste0( taxonomy_ver2%>%filter(fullnames %in% contigstoextract$fullnames)%>%nrow()/nrow(taxonomy_ver2)*100, "% of markers present on the same contigs donot match at phyla level taxonomic annotation."))
+
+
+#------------------------------------------------------------------------------------------
+##Examine all contigs with more than 2 markers-
+
+match_columns<-function(columnnumber){
+taxonomy_contigs2<-taxonomy_contigs%>%filter(n==columnnumber)
+taxonomy_ver2_contigtaxa<-taxonomy_ver2%>%select(fullnames,taxonomy)%>%filter(fullnames %in% taxonomy_contigs2$fullnames) #extract markers present on same contigs
+
+taxonomy_ver2_contigtaxa$phyla<-gsub("_c__.*$","",taxonomy_ver2_contigtaxa$taxonomy)
+
+taxonomy_ver2_contigtaxa$class<-gsub("_o__.*$","",taxonomy_ver2_contigtaxa$taxonomy)
+
+taxonomy_ver2_contigtaxa$order<-gsub("_f__.*$","",taxonomy_ver2_contigtaxa$taxonomy)
+
+taxonomy_ver2_contigtaxa$family<-gsub("_g__.*$","",taxonomy_ver2_contigtaxa$taxonomy)
+
+
+library(data.table)
+setDT(taxonomy_ver2_contigtaxa)
+taxonomy_contigs_phyla<-as.data.table(taxonomy_ver2_contigtaxa)[, toString(phyla), by = list(fullnames)]
+taxonomy_contigs_phyla2<-setDT(taxonomy_contigs_phyla)[, paste0("phyla", 1:columnnumber) := tstrsplit(V1, ",")]
+
+taxonomy_contigs_phyla2<-as.data.frame(apply(taxonomy_contigs_phyla2,2,function(x)gsub(' ', '',x))) #remove spaces in each cell.
+rownames(taxonomy_contigs_phyla2)<-taxonomy_contigs_phyla2$fullnames
+
+taxonomy_contigs_phyla2.2<-taxonomy_contigs_phyla2%>%select(-c(fullnames,V1))
+test<-transform(taxonomy_contigs_phyla2.2, same = apply(taxonomy_contigs_phyla2.2, 1, function(x) length(unique(x)) == 1))
+
+falsecolumns<-test%>%filter(same=="FALSE")
+
+print(paste0( test%>%filter(same=="TRUE")%>%nrow()/nrow(taxonomy_contigs_phyla2)*100, "% of", columnnumber, "markers have identical taxonomic annotation at phyla level when they are present on the same contig."))
+return(falsecolumns)
+}
+
+check1<-match_columns(2)
+check2<-match_columns(3)
+check3<-match_columns(4)
+match_columns(5)
+match_columns(6)
+check6<-match_columns(7)
+match_columns(8)
+match_columns(9)
+match_columns(10)
+match_columns(11)
+match_columns(12)
+match_columns(13)
+match_columns(14)
+match_columns(15)
+match_columns(16)
+match_columns(17)
+match_columns(18)
+match_columns(19)
+match_columns(20)
+match_columns(21)
+match_columns(22)
+match_columns(23)
+match_columns(24)
+match_columns(25)
+match_columns(26)
+#match_columns(27)
+#match_columns(28)
+#match_columns(29)
+#match_columns(30)
+#match_columns(31)
+#match_columns(32)
+#match_columns(32)
+#match_columns(33)
+#match_columns(34)
+#match_columns(35)
+#match_columns(36)
+#match_columns(37)
+#match_columns(38)
+#match_columns(39)
+match_columns(40)
+
+
+#---------------------------------------------------------------------------------------------
+#removing the mismatched marker-genes-
+
+taxonomy_ver3<-taxonomy_ver2%>%filter(!fullnames %in% rownames(check1))
+taxonomy_ver4<-taxonomy_ver3%>%filter(!fullnames %in% rownames(check2))
+taxonomy_ver5<-taxonomy_ver4%>%filter(!fullnames %in% rownames(check3))
+taxonomy_ver6<-taxonomy_ver5%>%filter(!fullnames %in% rownames(check6))
+
+write.csv(taxonomy_ver6,file="taxonomy/all-cogs-taxonomy-contiginfo-tpm-filtered-corrected.csv")
+```
+
+
+
+
+## get marker gene taxonomy present in 129 samples-
+```{r}
+
+#get family level taxonomy of each marker gene-
+taxonomy_ver2<-read.csv("taxonomy/all-cogs-taxonomy-contiginfo-tpm-filtered-corrected.csv",row.names=1) #markers present in contigs >1000 bps and >1TPM, similar to functional data + filtered for mismatched marker-gene taxonomy.
+
+taxonomy_ver2$family<-gsub("_g__.*$","",taxonomy_ver2$taxonomy)
+
+#spread the data by samples and family-level taxonomy-
+library(tidyr)
+library(data.table)
+
+setDT(taxonomy_ver2)
+taxonomy_ver2_markertaxa<-taxonomy_ver2[, .(prokTPM = sum(TPM)), by = .(samples,family)]
+
+taxonomy_ver2_spread<-as.data.frame(spread(taxonomy_ver2_markertaxa,family,prokTPM))
+rownames(taxonomy_ver2_spread)<-taxonomy_ver2_spread$samples
+
+#join the spread file with 129 termite tree to get 124 samples out-
+#these 129 samples contain 10,000 contigs above 1000 bps, with more than 100 prokaryotic contigs.
+
+newtree_129samples<-read.tree("1000bps_taxonomy_129taxa_tree.nwk")
+dnew2<-data.frame(label=newtree_129samples$tip.label)
+
+dnew2$label<-as.character(dnew2$label)
+dnew2$runnumber<-unlist(lapply(strsplit(dnew2$label,split="-"),"[",1))
+dnew2$runnumber<-gsub("_","-",dnew2$runnumber)
+
+
+taxonomy_ver2_spread2<-merge(taxonomy_ver2_spread,dnew2,by.x="samples",by.y="runnumber",all.y=TRUE)
+rownames(taxonomy_ver2_spread2)<-taxonomy_ver2_spread2$label
+
+##<to check from here>
+#order the rownames by termite tree to get samples with no data at this step!
+taxonomy_ver2_spread2<-taxonomy_ver2_spread2[match(newtree_129samples$tip.label,rownames(taxonomy_ver2_spread2)), ]
+taxonomy_ver2_spread2[is.na(taxonomy_ver2_spread2)] <-0
+write.csv(taxonomy_ver2_spread2,file="metagenome-taxonomy-1000bps-bymarkersspread-rawTPM-march2021.csv")
+
+
+head(taxonomy_ver2_spread2,5)
+```
+
+
+
+## data filtering for statistical analysis + clr transformation
+```{r}
+
+#clr transform the spread data-
+taxonomy_ver2_spread2<-read.csv("metagenome-taxonomy-1000bps-bymarkersspread-rawTPM-march2021.csv",row.names = 1)
+
+
+clr_transform<-function(filename_spread2){ 
+library(propr)
+filename_spread2[is.na(filename_spread2)] <-0 #convert NA to zero
+#rownames(filename_spread2)<-filename_spread2$label
+filename_spread2$label<-NULL
+filename_spread2$samples<-NULL
+#add psuedo counts to account for missing and not-present data-
+filename_spread2<-filename_spread2+0.65
+
+filename_propr<-propr(filename_spread2,metric="rho",ivar="clr")
+
+#creating a df with all the transformed pathways and metadata-
+filename_propr_df<-filename_propr@logratio
+
+return(filename_propr_df)
+}
+
+markergene_taxonomy_129samples_clr<-clr_transform(taxonomy_ver2_spread2)
+
+
+write.csv(markergene_taxonomy_129samples_clr,file="metagenome-taxonomy-1000bps-bymarkersspread-clr-march2021.csv")
+
+##check-
+head(round(sum(markergene_taxonomy_129samples_clr[1,])),3) #the overall sum per sample (i.e row) should be close to zero after clr transformation.
+
+nrow(markergene_taxonomy_129samples_clr)
+ncol(markergene_taxonomy_129samples_clr)
+
+##filtering the taxonomy file to find atleast 3 microbes in >2.5% of termite samples. 3 taxa cutoff is based on https://bioconductor.org/packages/release/bioc/vignettes/philr/inst/doc/philr-intro.html. While 2.5% of samples is an arbitrary cut-off as different metagenome analysis pipeline has different cut-offs. Using Prevalance plots, I find that we can remove singletons, rare-taxa that might be sequencing errors, and  make sure that we can capture taxa abundant in most of the termite lineage (for example, Apicotermitinae, soil-feeding Termitidae are not sequenced too deeply). 
+
+
+
+#from clr transformed data->re-select columns present in 2.5% of samples (3/129). Based on "basicstats_march2021.Rmd" "prevalanceThreshold" calculations.
+above2.5perc_function<-function(filename){
+filename$label<-NULL  
+filename$samplename<-NULL  
+
+filename2<-filename #for filtering 
+filename2[filename2 > 0] <- 1 
+filename2[filename2 <= 0] <-0
+filename_10perc<-filename2[colSums(filename2) >= 3]  
+columns<-colnames(filename_10perc) 
+
+filename3<-filename%>%dplyr::select(columns)
+return(filename3)
+}
+
+
+markergene_taxonomy_129samples_clr_2.5perc<-above2.5perc_function(markergene_taxonomy_129samples_clr)
+
+#from clr transformed data-> re-select rows with more than 3 functions 
+morethan3taxa_functions<-function(filename){
+ 
+filename$label<-NULL 
+filename$samplename<-NULL
+filename2<-filename
+filename2[filename2 > 0] <- 1
+filename2[filename2 <= 0] <-0
+filename_threeabove<-filename2[rowSums(filename2[,])>=3, ]
+rows<-rownames(filename_threeabove)
+
+filename3<-subset(filename, rownames(filename) %in% rows)
+
+return(filename3)
+}
+
+markergene_taxonomy_129samples_clr_2.5perc_3above<-morethan3taxa_functions(markergene_taxonomy_129samples_clr_2.5perc)
+
+write.csv(markergene_taxonomy_129samples_clr_2.5perc_3above,file="taxonomy_129samples_184taxa_march2021.csv")
+#-------------------------------------------------
+
+```
+
+
+## taxonomy stats-Moran's I and Phyl.anova-
+```{r}
+
+tree<-read.tree("1000bps_taxonomy_129taxa_tree.nwk")
+
+functions<-read.csv("taxonomy_129samples_184taxa_march2021.csv",row.names = 1,header=TRUE)
+#functions$X<-NULL
+functions<-functions[match(tree$tip.label,rownames(functions)), ] #match with the tree
+
+library(adephylo)
+library(ape) 
+library(phylobase) 
+library(phylosignal) 
+ 
+
+functions[is.na(functions)] <-0 #convert any NA to zero
+functions<-functions[match(tree$tip.label,rownames(functions)), ]
+p4d <- phylo4d(tree,functions)
+p2<-phyloSignal(p4d = p4d, method = "I")
+
+#adjusted p-value using  fdr method-
+mod2 = as.data.frame(p2$pvalue)
+mod2$padjusted_lambda<-p.adjust(mod2$I, method='fdr')
+mod2$functions<-rownames(mod2)
+mod2<-mod2%>%dplyr::mutate(significance_padjusted=ifelse(padjusted_lambda<0.05,"*",""))
+mod2<-mod2%>%dplyr::mutate(significance_moranI=ifelse(I<0.05,"*",""))
+
+write.csv(mod2,file="phylogenetic_autocorrelation_taxonomy_184columns_129samples_march2021.csv")
+
+#-----------------------------------------------------------------------------
+#Phylogenetic anova
+
+#individually-  running the function in a list of columns-
+tree<-read.tree("1000bps_taxonomy_129taxa_tree.nwk")
+functions<-read.csv("taxonomy_129samples_184taxa_march2021.csv",row.names = 1,header=TRUE)
+#functions$X<-NULL
+functions<-functions[match(tree$tip.label,rownames(functions)), ] #match the tree
+functions <-functions+100 #add a constant to every value
+
+sampleinfo<-read.csv("taxonomy/sample_names_ids_withotherfactors_tomedit.2.csv")
+
+library(geomorph)
+phyl.anova.func2_list<-function(filename){
+filename<-as.data.frame(t(filename)) #convert row to column
+filename$label<-rownames(filename)
+geo_functions<-merge(filename,sampleinfo,by.x="label",by.y="termite_tree_labels")
+geo_functions$diet_type_number4<-as.factor(geo_functions$diet_type_number4)
+geo_functions[,2]<-as.numeric(geo_functions[,2])
+
+gdf <- geomorph.data.frame(abundance = geo_functions[,2], diet = as.factor(geo_functions$diet_type_number4), phy = tree) #create a dataframe that contains the data and phylogeny. [according to google forum]
+
+#group_name <- names(filename)[2] #get the correct column name. column 2 is the cazyme.
+
+geomorph.lm<-procD.lm(abundance ~ diet, iter=9999,RRPP=TRUE,effect.type = "F", SS.type = "II" ,data=gdf) #SS.type="II" is used if the groups (i.e. diet/lineage) are of uneven sizes.
+mod<-anova(geomorph.lm) #to examine if there is a phylogenetic correlation between "y" and "x"
+mod2<-as.data.frame(mod$table)
+mod2<-mod2[1,7]
+# d is distance between vector lengths is the difference in the amount of shape change per unit of size. If d is 0.05 i.e., | 0.20 - 0.15 |.  Why do this?  Two vectors can be correlated in direction - the way shape changes with size - but one group can exhibit more shape change per unit size than the other
+#D tells us the effect size of the standard deviation between two groups. Positive and above 0.2-0.3 means larger positive difference, while negative and below -0.2 to -0.3 means larger negative difference.
+
+pw<-pairwise(geomorph.lm,groups = as.factor(gdf$diet))
+pw_summary<-summary(pw,confidence=0.95,show.vectors = TRUE)
+pw_summary2<-as.data.frame(pw_summary$summary.table)
+
+pw_summary2$padjust<-p.adjust(pw_summary2$`Pr > d`,method="fdr") #fdr correction of p.value
+pw_summary2$diets<-rownames(pw_summary2)
+
+#convert the output to correct formats-
+names<-colnames(geo_functions[2])
+pw_summary2$genename<-rep(names,times=nrow(pw_summary2))
+library(tidyr)
+pw_summary3<-pw_summary2%>%dplyr::select("padjust","diets","genename")
+pw_spread<-pw_summary3%>%spread(diets,padjust)
+pw_spread2<-cbind(pw_spread,mod2)
+
+return(pw_spread2)
+}
+
+functions_t<-as.data.frame(t(functions))
+xy.list <-  split(functions_t, seq(nrow(functions_t))) #convert df to a list
+
+taxonomy_geomorph<-lapply(xy.list,phyl.anova.func2_list) #apply on all columns 
+ 
+taxonomy_geomorph_df<-do.call(rbind.data.frame,taxonomy_geomorph)
+ 
+
+#find p.adjust for anova-
+taxonomy_geomorph_df$padjust<-p.adjust(taxonomy_geomorph_df$mod2,method="fdr")
+taxonomy_geomorph_df<-taxonomy_geomorph_df%>%mutate(significant_mod2=ifelse(mod2 <=0.05,"*",""))
+taxonomy_geomorph_df<-taxonomy_geomorph_df%>%mutate(significant_anova=ifelse(padjust <=0.05,"*",""))
+
+write.csv(taxonomy_geomorph_df,file="Phylogenetic_anova_withdiet_taxonomy_184columns_129samples_march2021.csv")
+
+
+```
+
+
+##basic stats for taxonomy-
+```{r}
+#how many total bacterial lineages present-
+morani<-read.csv("phylogenetic_autocorrelation_taxonomy_184columns_129samples_march2021.csv")
+morani$domain<-gsub("_p__.*$","",morani$X)
+morani_bacterial<-morani%>%filter(domain=="d__Bacteria")
+
+print(paste0("There are ", nrow(morani_bacterial), " bacterial lineages in our Phylogenetic autocorrelation analysis."))
+
+#How many phyla are present in the stats?
+familylevel<-read.csv("family_levelclassifications_markergenes.csv") #generated from Moran's I dataset. All the lineages classified at family level. Those at higher level are not included here.
+familylevel$phyla<-gsub("_c__.*$","",familylevel$family_level_classification)
+familylevel$domain<-gsub("_p__.*$","",familylevel$phyla)
+
+familylevel%>%select(phyla,domain)%>%group_by(phyla,domain)%>%count()
+familylevel%>%filter(domain=="d__Bacteria")%>%select(phyla)%>%unique()%>%count()
+
+print(paste0("There are ", familylevel%>%filter(domain=="d__Bacteria")%>%nrow(), "families in ",familylevel%>%filter(domain=="d__Bacteria")%>%select(phyla)%>%unique()%>%count(), "  bacterial phyla in marker-gene dataset."))
+
+
+#get the Moran's I and Phylogenetic anova for the microbes classified at family level-
+
+morani<-read.csv("phylogenetic_autocorrelation_taxonomy_184columns_129samples_march2021.csv")
+morani2<-morani%>%filter(X %in% familylevel$family_level_classification)
+write.csv(morani2,file="phylogenetic_autocorrelation_taxonomy_99family_129samples_march2021.csv")
+
+anova<-read.csv("Phylogenetic_anova_withdiet_taxonomy_184columns_129samples_march2021.csv")
+anova2<-anova%>%filter(genename %in% familylevel$family_level_classification)
+write.csv(anova2,file="Phylogenetic_anova_withdiet_taxonomy_99family_129samples_march2021.csv")
+#----------------------------------------------
+#Distribution of Archaea in all samples + Mimeutermes sample-
+taxonomy_clr<-read.csv("taxonomy_129samples_184taxa_march2021.csv",row.names = 1)
+taxonomy_rawtpm<-read.csv("metagenome-taxonomy-1000bps-bymarkersspread-rawTPM-march2021.csv",row.names=1)
+
+##how many archaeal families present in the rawTPM data in 124 samples-
+taxonomy_rawtpm$label<-NULL
+taxonomy_rawtpm$samples<-NULL
+taxonomy_rawtpm[taxonomy_rawtpm > 0] <- 1
+taxonomy_rawtpm[taxonomy_rawtpm <= 0] <-0
+taxonomy_rawtpm_morethanone<-taxonomy_rawtpm[rowSums(taxonomy_rawtpm[,])>1, ]
+
+taxonomy_rawtpm_cols<-colnames(taxonomy_rawtpm_morethanone)%>%as.data.frame()
+colnames(taxonomy_rawtpm_cols)<-c("taxa")
+taxonomy_rawtpm_cols$domain<-gsub("_p__.*$","",taxonomy_rawtpm_cols$taxa)
+taxonomy_rawtpm_cols%>%filter(domain=="d__Archaea")
+
+library(stringr)
+print(paste0("There are ",taxonomy_rawtpm_cols%>%filter(str_detect(taxa, "_f__") & domain=="d__Archaea")%>%nrow(), " archaeal families in our metagenomes, which are-"))
+taxonomy_rawtpm_cols%>%filter(str_detect(taxa, "_f__") & domain=="d__Archaea")
+
+##how many archaeal families present in statistical data of 129 samples-
+taxonomy_clr_cols<-colnames(taxonomy_clr)%>%as.data.frame()
+colnames(taxonomy_clr_cols)<-c("taxa")
+taxonomy_clr_cols$domain<-gsub("_p__.*$","",taxonomy_clr_cols$taxa)
+taxonomy_clr_cols%>%filter(domain=="d__Archaea")
+
+print(paste0("There are ",taxonomy_clr_cols%>%filter(str_detect(taxa, "_f__") & domain=="d__Archaea")%>%nrow(), " archaeal families in 2.5% of termite samples, which are-"))
+taxonomy_clr_cols%>%filter(str_detect(taxa, "_f__") & domain=="d__Archaea")
+#--------------------------------------------------------------------------------
+##Overall relative abundance of Archaea-
+taxonomy_rawtpm<-read.csv("metagenome-taxonomy-1000bps-bymarkersspread-rawTPM-march2021.csv",row.names=1)
+taxonomy_rawtpm$samples<-NULL
+taxonomy_long<-gather(taxonomy_rawtpm, taxa, tpm, -(label), factor_key=TRUE)%>%as.data.frame()
+taxonomy_long$domain<-gsub("_p__.*$","",taxonomy_long$taxa)
+taxonomy_long<-taxonomy_long%>%filter(tpm>0)
+
+library(data.table)
+setDT(taxonomy_long)
+taxonomy_long_domains<-taxonomy_long[, .(tpm = sum(tpm)), by = .(domain)]
+
+taxonomy_long_domains[2,2]/sum(taxonomy_long_domains$tpm)*100
+
+print(paste0("Proportion of Archaea in 124 metagenomes are ", taxonomy_long_domains[1,2]/sum(taxonomy_long_domains$tpm)*100 ,"%"))
+
+#-------------------------------------------------------------------------------
+##Which sample has the most relative abundance of archaea?
+
+library(data.table)
+setDT(taxonomy_long)
+taxonomy_long_sampledomains<-taxonomy_long[, .(tpm = sum(tpm)), by = .(label,domain)]
+taxonomy_long_sampledomains_archaea<-taxonomy_long_sampledomains%>%filter(domain=="d__Archaea")
+max(taxonomy_long_sampledomains_archaea$tpm)
+taxonomy_long_sampledomains_archaea%>%filter(tpm==max(taxonomy_long_sampledomains_archaea$tpm)) #extract the samplename with most archaeal TPM in it.
+
+
+
+mimeutermes<-taxonomy_long%>%filter(label %in% c("272_32-CIVT017-Nasutitermitinae-Mimeutermes_sorex"))
+mimeutermes_bathy<-mimeutermes%>%filter(str_detect(taxa, "Bathyarchaeia"))
+
+print(paste0("Proportion of Bathyarchaeia in Mimeutermes sample is ", sum(mimeutermes_bathy$tpm)/sum(mimeutermes$tpm)*100))
+
+#NOTE-Mimeutermes has the most no. of Archaeal relative abundance in all samples.
+#---------------------------------------------------------------------------------------
+##do all soil-feeders have higher Archaeal relative abundance than other diets?
+sampleinfo<-read.csv("taxonomy/sample_names_ids_withotherfactors_tomedit.2.csv")
+taxonomy_long_diet<-merge(taxonomy_long,sampleinfo,by.x="label",by.y="termite_tree_labels")
+
+library(data.table)
+setDT(taxonomy_long_diet)
+taxonomy_long_dietdomains<-taxonomy_long_diet[, .(tpm = sum(tpm)), by = .(diet_type_number4,domain)]
+taxonomy_long_dietdomains<-taxonomy_long_dietdomains%>%group_by(diet_type_number4)%>%mutate(overallsum=sum(tpm))
+taxonomy_long_dietdomains$perc<-taxonomy_long_dietdomains$tpm/taxonomy_long_dietdomains$overallsum*100
+
+taxonomy_long_dietdomains%>%filter(domain=="d__Archaea")
+
+
+#NOTE-Archaea are more abundant in soil-feeding termites, followed by fungal-cultivating termites.
+```
+
+
+
+
+
+##16S and marker gene taxonomy comparison-
+```{r}
+ncbi<-read.csv("taxonomy/16S_newdata_89samples_408columns.csv",row.names=1) #OTUs summed at family level
+markergene<-read.csv("metagenome-taxonomy-1000bps-bymarkersspread-rawTPM-march2021.csv")
+
+#how many samples are in common between the two datasets?
+ncbi_markers<-merge(ncbi,markergene,by.x="termite_samples","X") #74 termite samples in common.
+rownames(ncbi_markers)<-ncbi_markers$termite_samples
+
+#how many family-level taxonomy in common between the two datasets?
+library(stringr)
+taxa_16s<-colnames(ncbi)%>%as.data.frame()
+colnames(taxa_16s)<-c("taxa")
+taxa_16s$taxaimproved<-taxa_16s$taxa
+taxa_16s$taxaimproved<-gsub("_fa$","",taxa_16s$taxaimproved)
+taxa_16s$taxaimproved<-gsub("_unclassified$","",taxa_16s$taxaimproved)
+taxa_16s$taxaimproved<-gsub("_uncultured$","",taxa_16s$taxaimproved)
+taxa_16s$taxaimproved<-gsub("_$","",taxa_16s$taxaimproved)
+taxa_16s$taxaimproved<-gsub("_soil_group$","",taxa_16s$taxaimproved)
+taxa_16s$taxaimproved<-gsub("_termite_group$","",taxa_16s$taxaimproved)
+taxa_16s$taxaimproved<-gsub("_uncultured_uncultured_uncultured_or$","",taxa_16s$taxaimproved)
+taxa_16s$taxaimproved<-gsub("_or$","",taxa_16s$taxaimproved)
+taxa_16s$taxaimproved<-gsub("_group$","",taxa_16s$taxaimproved)
+taxa_16s$taxaimproved<-gsub("_uncultured$","",taxa_16s$taxaimproved)
+taxa_16s$taxaimproved<-gsub("_lineage$","",taxa_16s$taxaimproved)
+taxa_16s$taxaimproved<-gsub("_gut$","",taxa_16s$taxaimproved)
+
+taxa_16s$taxonomyofinterest<-gsub("^.*_", "",taxa_16s$taxaimproved)
+
+#are there any duplicates in "taxonomyofinterest" column for 16S-
+dups<-taxa_16s%>%select(taxonomyofinterest)%>%group_by(taxonomyofinterest)%>%count()%>%filter(n>1)
+taxa_16s_dups<-taxa_16s%>%filter(taxonomyofinterest %in% dups$taxonomyofinterest)
+write.csv(taxa_16s_dups,file="duplicates_16s_taxonomy.csv")
+#NOTE-if there are duplicates, manually add them in the "taxonomy/16S_newdata_89samples_408columns.csv" file
+
+taxa_markers<-colnames(markergene)%>%as.data.frame()
+colnames(taxa_markers)<-c("taxa")
+taxa_markers$taxaimproved<-taxa_markers$taxa
+taxa_markers$taxaimproved<-gsub("Treponemataceae_B$","TreponemataceaeB",taxa_markers$taxaimproved)
+taxa_markers$taxonomyofinterest<-gsub("^.*_", "",taxa_markers$taxaimproved)
+
+
+commontaxa<-merge(taxa_markers,taxa_16s,by="taxonomyofinterest") #160 family-level taxa in common.
+commontaxa_vector<-c(as.vector(commontaxa$taxa.x),as.vector(commontaxa$taxa.y))
+
+names<-names(ncbi_markers)[(names(ncbi_markers) %in% commontaxa_vector)]
+ncbi_markers_subset <- ncbi_markers[, names]
+
+write.csv(ncbi_markers_subset,file="taxonomy_16S_markers_rawcounts.csv")
+#NOTE- we have 74 termite samples with 145 common family-level taxa.
+#-------------------------------------------------------------------------------------------
+##extract out the "others" column in each file-
+
+#ncbi 16S-
+ncbi_long<-gather(ncbi,taxa,count,2:nrow(ncbi))
+ncbi_long<-ncbi_long%>%mutate(presence=ifelse(taxa %in% names,"common","others"))
+ncbi_long<-ncbi_long%>%filter(count!=0)
+
+markers_long<-gather(markergene,taxa,count,3:326)
+markers_long<-markers_long%>%mutate(presence=ifelse(taxa %in% names,"common","others"))
+markers_long$count<-as.numeric(markers_long$count)
+markers_long<-markers_long%>%filter(count!=0)
+
+#sum by "others"
+setDT(ncbi_long)
+ncbi_long_others<-ncbi_long[, .(count = sum(count)), by = .(termite_samples,presence)]
+ncbi_long_others<-ncbi_long_others%>%filter(presence=="others")
+
+
+setDT(markers_long)
+markers_long_others<-markers_long[, .(count = sum(count)), by = .(X,presence)]
+markers_long_others<-markers_long_others%>%filter(presence=="others")
+#-------------------------------------------------------------------------------------------
+##join all the data in one-
+ncbi_markers_subset<-read.csv("taxonomy_16S_markers_rawcounts.csv")
+ncbi_markers_subset2<-merge(ncbi_markers_subset,ncbi_long_others,by.x="X",by.y="termite_samples")
+ncbi_markers_subset3<-merge(ncbi_markers_subset2,markers_long_others,by="X")
+ncbi_markers_subset3$presence.y<-NULL
+ncbi_markers_subset3$presence.x<-NULL
+
+write.csv(ncbi_markers_subset3,file="taxonomy_16S_markers_others_rawcounts.csv")
+#-------------------------------------------------------------------------------------------
+##CLR-transform the data 
+ncbi_markers_subset3<-read.csv("taxonomy_16S_markers_others_rawcounts.csv",row.names=1)
+rownames(ncbi_markers_subset3)<-ncbi_markers_subset3$X
+ncbi_markers_subset3$X<-NULL
+
+clr_transform<-function(filename_spread2){ 
+library(propr)
+filename_spread2[is.na(filename_spread2)] <-0 #convert NA to zero
+#rownames(filename_spread2)<-filename_spread2$label
+filename_spread2$samples<-NULL
+filename_spread2$termite_samples<-NULL
+#add psuedo counts to account for missing and not-present data-
+filename_spread2<-filename_spread2+0.65
+
+filename_propr<-propr(filename_spread2,metric="rho",ivar="clr")
+#creating a df-
+filename_propr_df<-filename_propr@logratio
+
+return(filename_propr_df)
+}
+
+ncbi_markers_clr<-clr_transform(ncbi_markers_subset3)
+
+above5perc_function<-function(filename){
+filename$label<-NULL  
+filename$samplename<-NULL  
+
+filename2<-filename #for filtering 
+filename2[filename2 > 0] <- 1 
+filename2[filename2 <= 0] <-0
+filename_10perc<-filename2[colSums(filename2) >= 4]  #4/74=5%
+columns<-colnames(filename_10perc) 
+
+filename3<-filename%>%dplyr::select(columns)
+return(filename3)
+}
+
+#ncbi_markers_clr_5perc<-above5perc_function(ncbi_markers_clr)
+
+#from clr transformed data-> re-select rows with more than 3 functions 
+morethan3taxa_functions<-function(filename){
+ 
+filename$label<-NULL 
+filename$samplename<-NULL
+filename2<-filename
+filename2[filename2 > 0] <- 1
+filename2[filename2 <= 0] <-0
+filename_threeabove<-filename2[rowSums(filename2[,])>=3, ]
+rows<-rownames(filename_threeabove)
+
+filename3<-subset(filename, rownames(filename) %in% rows)
+
+return(filename3)
+}
+
+#ncbi_markers_clr_5perc_3above<-morethan3taxa_functions(ncbi_markers_clr_5perc)
+write.csv(ncbi_markers_clr,file="taxonomy_16S_markers_others_clr.csv") #no filters applied!
+#----------------------------------------------------------------------------------------------------
+#reorder the columns in the dataframe-
+ncbi_markers_clr<-read.csv("taxonomy_16S_markers_others_clr.csv",row.names=1)
+
+#get the new names-
+columns<-colnames(ncbi_markers_clr)%>%as.data.frame()
+colnames(columns)<-c("originalcolumns")
+columns$newcolumns<-columns$originalcolumns
+columns$newcolumns<-gsub("_fa$","",columns$newcolumns)
+columns$newcolumns<-gsub("_unclassified$","",columns$newcolumns)
+columns$newcolumns<-gsub("_uncultured$","",columns$newcolumns)
+columns$newcolumns<-gsub("_$","",columns$newcolumns)
+columns$newcolumns<-gsub("_soil_group$","",columns$newcolumns)
+columns$newcolumns<-gsub("_termite_group$","",columns$newcolumns)
+columns$newcolumns<-gsub("_uncultured_uncultured_uncultured_or$","",columns$newcolumns)
+columns$newcolumns<-gsub("_or$","",columns$newcolumns)
+columns$newcolumns<-gsub("_group$","",columns$newcolumns)
+columns$newcolumns<-gsub("_uncultured$","",columns$newcolumns)
+columns$newcolumns<-gsub("_lineage$","",columns$newcolumns)
+columns$newcolumns<-gsub("_gut$","",columns$newcolumns)
+columns$newcolumns<-gsub("Treponemataceae_B$","TreponemataceaeB",columns$newcolumns)
+columns<-columns%>%mutate(columnids=ifelse(str_detect(newcolumns, "^Bacteria|^Archaea"),"s16","markers"))
+columns$newcolumns2<-gsub("^.*_", "",columns$newcolumns)
+columns$finalcolumns<-paste(columns$columnids,columns$newcolumns2,sep="_")
+
+#get the full taxonomy in the column header
+columns2<-merge(columns,taxa_markers,by.x="newcolumns2",by.y="taxonomyofinterest",all.x = TRUE)
+columns2$finalcolumns2<-paste(columns2$columnids,columns2$taxaimproved,sep="_")
+columns2<-columns2%>%mutate(finalcolumns2=ifelse(is.na(taxa),as.character(finalcolumns),as.character(finalcolumns2)))
+
+#rename the columns of the markergene-16s data on "columns" df-
+ncbi_markers_clr2<- ncbi_markers_clr%>% rename_at(vars(columns2$originalcolumns), ~ columns2$finalcolumns2)
+#order the "columns" df by taxonomy-
+columns2<-columns2[order(columns2$newcolumns2), ]
+#get the same order in the markergene-16S data-
+ncbi_markers_clr2 <- ncbi_markers_clr2[columns2$finalcolumns2]
+
+  
+write.csv(ncbi_markers_clr2,file="taxonomy_16S_markers_others_clr_ordered.csv")
+
+```
+
+
+
+
+
+
+
+

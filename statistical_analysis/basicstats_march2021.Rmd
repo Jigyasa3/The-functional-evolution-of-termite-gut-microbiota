@@ -1,0 +1,1152 @@
+---
+title: "basicstats"
+author: "Jigyasa_Arora"
+date: "4/12/2021"
+---
+
+```{r}
+
+library(dplyr)
+library(tidyr)
+library(data.table)
+library(ape)
+library(stringr)
+
+```
+
+##quast results-no.of scaffolds + total microbial ORFs-
+```{r}
+quast<-read.csv("basicstats/quast_results_allsamples.csv")
+allcontigs<-read.csv("basicstats/allsamples-totalnoofcontigs.txt",header=FALSE,sep=":")
+allcontigs$V1<-gsub("filename-","",allcontigs$V1)
+allcontigs$V1<-gsub(".fasta","",allcontigs$V1)
+quast_allcontigs<-merge(quast,allcontigs,by.x="samples",by.y="V1")
+colnames(quast_allcontigs)<-c("samples","all_count","mapped_count","percent_mapped","allcontig_count")
+
+allcontigsabove1000<-read.csv("basicstats/allsamples-contigsabove1000bps.txt",header=FALSE,sep=":")
+allcontigsabove1000$V1<-gsub("above1000-filename-","",allcontigsabove1000$V1)
+allcontigsabove1000$V1<-gsub(".fasta","",allcontigsabove1000$V1)
+quast_allcontigs2<-merge(quast_allcontigs,allcontigsabove1000,by.x="samples",by.y="V1")
+colnames(quast_allcontigs2)<-c("samples","all_count","mapped_count","percent_mapped","allcontig_count","contigabove1000_count")
+
+allcontigsmicrobialabove1000<-read.csv("basicstats/allsamples-microbialabove1000bps.txt",header=FALSE)
+quast_allcontigs3<-merge(quast_allcontigs2,allcontigsmicrobialabove1000,by.x="samples",by.y="V1")
+colnames(quast_allcontigs3)<-c("samples","all_count","mapped_count","percent_mapped","allcontig_count","contigabove1000_count","microbialcontigs_above1000_count")
+
+write.csv(quast_allcontigs3,file="basicstats/quast_results_allsamples_allcounts.csv")
+
+#-----------------------------------------------------------------------------------------------------
+quast_all<-read.csv("basicstats/quast_results_allsamples_allcounts.csv",row.names = 1)
+
+print(paste0("shotgun sequencing generated on average= ",mean(quast_all$all_count), " reads"))
+
+print(paste0("shotgun sequencing generated on average= ",mean(quast_all$contigabove1000_count), " scaffolds above 1000bps"))
+
+print(paste0("shotgun sequencing generated on average= ",sum(quast_all$mapped_count)/sum(quast_all$all_count)*100, "% of mapped reads"))
+
+
+
+```
+
+
+##samtools results-%mapped reads to GTDB prokaryotic contigs
+```{r}
+quast<-read.csv("basicstats/quast_results_allsamples_allcounts.csv")
+mappedreads<-read.csv("basicstats/all-prokmapped-reads.txt",header=FALSE,sep="\t")
+colnames(mappedreads)<-c("samples","prokmappedreads")
+
+quast_prokmappedreads<-merge(quast,mappedreads,by="samples")
+write.csv(quast_prokmappedreads,file="basicstats/quast_results_allsamples_allcounts_mappedreads.csv")
+sampleinfo<-read.csv("taxonomy/sample_names_ids_withotherfactors_tomedit.2.csv")
+
+quast_prokmappedreads2<-merge(quast_prokmappedreads,sampleinfo,by.x="samples",by.y="samples")
+
+#stats-
+lower<-quast_prokmappedreads2%>%filter(higher_lower=="lower") #also includes Cryptocercus cockroach
+lower2<-quast_prokmappedreads2%>%filter(higher_lower=="lower" & samples!="229-08") #not includes Cryptocercus cockroach
+higher<-quast_prokmappedreads2%>%filter(higher_lower=="higher")
+wood_higher<-quast_prokmappedreads2%>%filter(diet_type_number4=="2")
+soil_higher<-quast_prokmappedreads2%>%filter(diet_type_number4=="3")
+fungus_higher<-quast_prokmappedreads2%>%filter(diet_type_number4=="5")
+
+##mean values-
+print(paste0("percentage of reads mapped to microbial contigs in all higher termites is ", sum(higher$prokmappedreads)/sum(higher$all_count)*100))
+
+print(paste0("percentage of reads mapped to microbial contigs in lower termites+Cryptocercus is ",sum(lower$prokmappedreads)/sum(lower$all_count)*100))
+
+print(paste0("percentage of reads mapped to microbial contigs in lower termites is ",sum(lower2$prokmappedreads)/sum(lower2$all_count)*100))
+
+print(paste0("percentage of reads mapped to microbial contigs in wood-feeding higher termites is ", sum(wood_higher$prokmappedreads)/sum(wood_higher$all_count)*100))
+
+print(paste0("percentage of reads mapped to microbial contigs in soil-feeding higher termites is ", sum(soil_higher$prokmappedreads)/sum(soil_higher$all_count)*100))
+
+print(paste0("percentage of reads mapped to microbial contigs in fungal feeding higher termites is ", sum(fungus_higher$prokmappedreads)/sum(fungus_higher$all_count)*100))
+
+
+```
+
+
+##which samples to choose for statistical analysis-
+```{r}
+#criteria-%mapped reads to prokaryotic contigs, no.of prokaryotic contigs, prevelance-
+quast_all<-read.csv("basicstats/quast_results_allsamples_allcounts.csv",row.names = 1)
+#1. samples with >=10,000 contigs longer than 1000bps
+quast_cri1<-quast_all%>%filter(contigabove1000_count>=10000) #& microbialcontigs_above1000_count >=1000)
+
+print(paste0("There are ", nrow(quast_cri1), " no. of metagenomes with more than equal to 10,000 contigs above 1000 bps"))
+
+
+#generate a tree from 129 samples-
+termitetree<-read.tree("basicstats/rna12-16S_concensus_may2020_newnames.nwk")
+d<-data.frame(label=termitetree$tip.label)
+d$samples<-unlist(lapply(strsplit(as.character(d$label),split="-"),"[",1))
+d$samples<-gsub("_","-",d$samples)
+
+tipstokeep<-d%>%filter(samples %in% quast_cri1$samples)
+termitetree_129samples<-keep.tip(termitetree,as.vector(tipstokeep$label))
+write.tree(termitetree_129samples,file="1000bps_taxonomy_129taxa_tree.nwk")
+
+#2. minimum no. of prokaryotic contigs in criteria1 samples-
+print(paste0("There are a minimum of ",min(quast_cri1$microbialcontigs_above1000_count), " microbial contigs in 129 samples."))
+print(paste0("There are a mean of ",mean(quast_cri1$microbialcontigs_above1000_count), " microbial contigs in 129 samples."))
+print(paste0("There are a maximum of ",max(quast_cri1$microbialcontigs_above1000_count), " microbial contigs in 129 samples."))
+
+
+#3.number of microbial ORFs in the 129 samples-
+#for i in proteinnames-*.txt;do  wc -l ${i} | awk '{print $1-1}' > numberof_microbialORFs_${i}.txt;done
+#for i in numberof_microbialORFs_proteinnames-*;do awk '{print FILENAME"\t"$0}' ${i} > 2-${i};done
+#cat 2-numberof_microbialORFs_proteinnames-* > allnumberof_microbialORFs.txt
+
+microbialorfs<-read.csv("basicstats/allnumberof_microbialORFs.txt",header=FALSE,sep="\t")
+microbialorfs$V1<-gsub("numberof_microbialORFs_proteinnames-","",microbialorfs$V1)
+microbialorfs$V1<-gsub(".txt.txt","",microbialorfs$V1)
+microbialorfs<-microbialorfs%>%filter(V1 %in% quast_cri1$samples)
+
+print(paste0("The mean Open reading frames in microbial contigs are ", mean(microbialorfs$V2)))
+
+
+allorfs<-read.csv("basicstats/allnumberof_ORFs.txt",header=FALSE,sep="\t")
+allorfs$V1<-gsub("numberofORFs_filename-","",allorfs$V1)
+allorfs$V1<-gsub("-prokka.faa-smallername.faa.txt","",allorfs$V1)
+allorfs<-allorfs%>%filter(V1 %in% quast_cri1$samples)
+
+print(paste0("The mean Open reading frames in all contigs are ", mean(allorfs$V2)))
+
+```
+
+##prevalance/cut-offs used for statistical analysis-
+```{r}
+#4. prevalence of phyla from the markergene data-
+markergenes<-read.csv("taxonomy/all-cogs-taxonomy-contiginfo-tpm-filtered-corrected.csv",row.names=1) #generated from "taxonomy_march2021.Rmd"
+markergenes$phyla<-gsub("_c__.*$","",markergenes$taxonomy)
+markergenes$family<-gsub("_g__.*$","",markergenes$taxonomy)
+
+
+##by phyloseq method-https://f1000researchdata.s3.amazonaws.com/manuscripts/10545/01069022-9b8d-4c77-a93b-a22a8d6edf87_8986_-_susan_holmes_v2.pdf?doi=10.12688/f1000research.8986.2&numberOfBrowsableCollections=27&numberOfBrowsableInstitutionalCollections=4&numberOfBrowsableGateways=26
+library(tidyr)
+library(data.table)
+
+#sum by family and samples
+markergenes2<-markergenes%>%dplyr::select(samples,family,TPM)
+setDT(markergenes2)
+markergenes2sum<-markergenes2[, .(prokTPM = sum(TPM)), by = .(samples,family)]
+
+#spread by family + extract 129 samples out-
+markergenes2sum_spread<-as.data.frame(spread(markergenes2sum,family,prokTPM))
+rownames(markergenes2sum_spread)<-markergenes2sum_spread$samples
+
+quast_cri1<-quast_cri1%>%dplyr::select(samples) #129 samples
+markergenes2sum_spread2<-merge(markergenes2sum_spread,quast_cri1,by.x="samples",by.y="samples")
+markergenes2sum_spread2<-as.data.frame(markergenes2sum_spread2)
+rownames(markergenes2sum_spread2)<-markergenes2sum_spread2$samples
+markergenes2sum_spread2$samples<-NULL
+
+#get into OTU format-
+markergenes2sum_spread_t<-t(markergenes2sum_spread2)%>%as.data.frame()
+markergenes2sum_spread_t[is.na(markergenes2sum_spread_t)] <-0
+
+#calculate prevalance-
+prevelancedf = apply(X = markergenes2sum_spread_t,
+                 MARGIN = 1,
+                 FUN = function(x){sum(x > 0)})
+
+#calculate relative abundance (sumTPM)-
+totalabundance<-rowSums(markergenes2sum_spread_t)
+
+prevdf1<-cbind(prevelancedf,totalabundance)%>%as.data.frame()
+prevdf1$family<-rownames(prevdf1)
+prevdf1$Phylum<-gsub("_c__.*$","",prevdf1$family)
+
+#plot prevalance vs relative abundance-
+library(ggplot2)
+p<-ggplot(prevdf1, aes(totalabundance, prevelancedf / length(markergenes2sum_spread_t),color=Phylum)) +geom_hline(yintercept = 0.05, alpha = 0.5, linetype = 2) + geom_point(size = 2, alpha = 0.7) +scale_x_log10() + labs(y="Prevalence [Frac. Samples]",x="Total Abundance", title="5% prevalance")+facet_wrap(~Phylum) + theme(legend.position="none")
+
+q<-ggplot(prevdf1, aes(totalabundance, prevelancedf / length(markergenes2sum_spread_t),color=Phylum)) +
+ # Include a guess for parameter
+ geom_hline(yintercept = 0.025, alpha = 0.5, linetype = 2) + geom_point(size = 2, alpha = 0.7) +
+ scale_x_log10() + labs(y="Prevalence [Frac. Samples]",x="Total Abundance", title="2.5% prevalance") +
+ facet_wrap(~Phylum) + theme(legend.position="none")
+
+
+r<-ggplot(prevdf1, aes(totalabundance, prevelancedf / length(markergenes2sum_spread_t),color=Phylum)) +
+ # Include a guess for parameter
+ geom_hline(yintercept = 0.015, alpha = 0.5, linetype = 2) + geom_point(size = 2, alpha = 0.7) +
+ scale_x_log10() + labs(y="Prevalence [Frac. Samples]",x="Total Abundance", title="1.5% prevalance") +
+ facet_wrap(~Phylum) + theme(legend.position="none")
+
+s<-ggplot(prevdf1, aes(totalabundance, prevelancedf / length(markergenes2sum_spread_t),color=Phylum)) +
+ # Include a guess for parameter
+ geom_hline(yintercept = 0.05, alpha = 0.5, linetype = 2, color="black")+ geom_hline(yintercept = 0.025, alpha = 0.5, linetype = 2, color="red")+ geom_hline(yintercept = 0.015, alpha = 0.5, linetype = 2, color="blue") + geom_point(size = 2, alpha = 0.7) +
+ scale_x_log10() + labs(y="Prevalence [Frac. Samples]",x="Total Abundance", title="All prevalances together") +
+ facet_wrap(~Phylum) + theme(legend.position="none")
+
+
+s
+
+
+pdf(file="prevalance_markergenes_phyla_129samples_0.05thres.pdf",height=8.5,width=13)
+p
+dev.off()
+
+
+
+#Final Prevalance threshold to use for markergenes-2.5% of samples
+prevalenceThreshold = 0.025 * length(markergenes2sum_spread_t)
+
+#---------------------------------------------------------------------------------------
+#5. prevalance threshold to use for CAZYme functional data-
+
+above1000_tpm_cazymes<-read.csv("cazymes_360columns_129samples_rawTPM_march2021.csv",row.names=1) #generated in "functions_march2021.Rmd" with all the filters.
+above1000_tpm_cazymes[is.na(above1000_tpm_cazymes)] <-0
+
+#remove singleton cazymes-
+above1000_tpm_cazymes_binary<-above1000_tpm_cazymes
+above1000_tpm_cazymes_binary[above1000_tpm_cazymes_binary > 0] <- 1 
+above1000_tpm_cazymes_binary[above1000_tpm_cazymes_binary <= 0] <-0
+cazymes_sumpersample<-colSums(above1000_tpm_cazymes_binary)%>%as.data.frame()
+colnames(cazymes_sumpersample)<-c("count")
+cazymes_sumpersample$cazymes<-rownames(cazymes_sumpersample)
+cazymes_sumpersample<-cazymes_sumpersample%>%mutate(types=ifelse(grepl("AA", cazymes),"AA",ifelse(grepl("GT",cazymes),"GT",ifelse(grepl("CBM",cazymes),"CBM",ifelse(grepl("GH",cazymes),"GH",ifelse(grepl("CE",cazymes),"CE","PL"))))))
+
+cazymes_sumpersample<-cazymes_sumpersample%>%filter(count>3 & types=="GH")
+
+#extract GHs present in >3 samples-
+above1000_tpm_cazymes_selected<-above1000_tpm_cazymes%>%dplyr::select(cazymes_sumpersample$cazymes)
+
+
+#get into OTU format-
+above1000_tpm_cazymes_selected_t<-t(above1000_tpm_cazymes_selected)%>%as.data.frame()
+above1000_tpm_cazymes_selected_t[is.na(above1000_tpm_cazymes_selected_t)] <-0
+
+#calculate prevalance-
+prevelancedf = apply(X = above1000_tpm_cazymes_selected_t,
+                 MARGIN = 1,
+                 FUN = function(x){sum(x > 0)})
+
+#calculate relative abundance (sumTPM)-
+totalabundance<-rowSums(above1000_tpm_cazymes_selected_t)
+
+prevdf1<-cbind(prevelancedf,totalabundance)%>%as.data.frame()
+prevdf1$ghs<-rownames(prevdf1)
+prevdf1$frac_prev<-prevdf1$prevelancedf / length(above1000_tpm_cazymes_selected_t)
+
+
+#extract prev-
+prevdf1_5<-prevdf1%>%filter(frac_prev>=0.05)
+prevdf1_1<-prevdf1%>%filter(frac_prev>=0.1)
+prevdf1_75<-prevdf1%>%filter(frac_prev>=0.075)
+
+#plot prevalance vs relative abundance-
+library(ggplot2)
+p<-ggplot(prevdf1, aes(totalabundance, prevelancedf / length(above1000_tpm_cazymes_selected_t))) +geom_hline(yintercept = 0.05, alpha = 0.5, linetype = 2,color="red")+ geom_hline(yintercept = 0.1, alpha = 0.5, linetype = 2,color="blue")+geom_hline(yintercept = 0.075, alpha = 0.5, linetype = 2,color="black") + geom_point(size = 2, alpha = 0.7) +scale_x_log10() + labs(y="Prevalence [Frac. Samples]",x="Total Abundance", title="10%, 7.5% and 5% prevalance") #+facet_wrap(~ghs) + theme(legend.position="none")
+
+
+#Final Prevalance threshold to use for cazymes-7.5% of samples
+prevalenceThreshold = 0.075 * length(above1000_tpm_cazymes_selected_t)
+
+#---------------------------------------------------------------------------------------------------
+#6. Prevalance to use for CAZyme microbe data (>5000bps contigs)-not applied
+
+functions_microbegenes_spread2<-read.csv("cazymes-taxonomy-allcontigs-5000bps_123samples_march2021.csv",row.names=1)
+functions_microbegenes_spread2$sample_names<-NULL
+functions_microbegenes_spread2$label<-NULL
+functions_microbegenes_spread2[is.na(functions_microbegenes_spread2)] <-0
+
+#remove singleton cazymes-
+above5000_tpm_cazymes_binary<-functions_microbegenes_spread2
+above5000_tpm_cazymes_binary[above5000_tpm_cazymes_binary > 0] <- 1 
+above5000_tpm_cazymes_binary[above5000_tpm_cazymes_binary <= 0] <-0
+cazymes_sumpersample<-colSums(above5000_tpm_cazymes_binary)%>%as.data.frame()
+colnames(cazymes_sumpersample)<-c("count")
+cazymes_sumpersample$cazymes<-rownames(cazymes_sumpersample)
+cazymes_sumpersample<-cazymes_sumpersample%>%mutate(types=ifelse(grepl("AA", cazymes),"AA",ifelse(grepl("GT",cazymes),"GT",ifelse(grepl("CBM",cazymes),"CBM",ifelse(grepl("GH",cazymes),"GH",ifelse(grepl("CE",cazymes),"CE","PL"))))))
+
+cazymes_sumpersample<-cazymes_sumpersample%>%filter(count>3 & types=="GH")
+
+#extract GHs present in >3 samples-
+above5000_tpm_cazymes_selected<-functions_microbegenes_spread2%>%dplyr::select(cazymes_sumpersample$cazymes)
+
+
+#get into OTU format-
+above5000_tpm_cazymes_selected_t<-t(above5000_tpm_cazymes_selected)%>%as.data.frame()
+above5000_tpm_cazymes_selected_t[is.na(above5000_tpm_cazymes_selected_t)] <-0
+
+#calculate prevalance-
+prevelancedf = apply(X = above5000_tpm_cazymes_selected_t,
+                 MARGIN = 1,
+                 FUN = function(x){sum(x > 0)})
+
+#calculate relative abundance (sumTPM)-
+totalabundance<-rowSums(above5000_tpm_cazymes_selected_t)
+
+prevdf1<-cbind(prevelancedf,totalabundance)%>%as.data.frame()
+prevdf1$ghs<-rownames(prevdf1)
+prevdf1$ghnames<-gsub("__d__.*$","",prevdf1$ghs)
+prevdf1$phyla<-gsub("^.*__d__","",prevdf1$ghs)
+prevdf1<-prevdf1%>%filter(phyla!="Bacteria")
+prevdf1$frac_prev<-prevdf1$prevelancedf/length(above5000_tpm_cazymes_selected_t)
+#extract prev-
+prevdf1_5<-prevdf1%>%filter(frac_prev>=0.05)
+prevdf1_1<-prevdf1%>%filter(frac_prev>=0.1)
+prevdf1_75<-prevdf1%>%filter(frac_prev>=0.075)
+
+#plot prevalance vs relative abundance-
+library(ggplot2)
+p<-ggplot(prevdf1, aes(totalabundance, prevelancedf / length(above5000_tpm_cazymes_selected_t),color=phyla)) +geom_hline(yintercept = 0.05, alpha = 0.5, linetype = 2,color="red") + geom_point(size = 2, alpha = 0.7) +scale_x_log10() + labs(y="Prevalence [Frac. Samples]",x="Total Abundance", title="5% prevalance") +facet_wrap(~ghnames) + theme(legend.position="none")
+
+
+#Final Prevalance threshold to use for cazymes-10% of samples
+#prevalenceThreshold = 0.1 * length(above1000_tpm_cazymes_selected_t)
+
+#--------------------------------------------------------------------------------------------------
+#7.Prevalance for metabolic genes
+metabolicgenes_tpm<-read.csv("metabolic_pathways_rawtpm_march2021.csv",row.names=1) #generated in "metabolicgenes_march2021.Rmd".
+metabolicgenes_tpm[is.na(metabolicgenes_tpm)] <-0
+
+#remove singleton cazymes-
+metabolicgenes_tpm_binary<-metabolicgenes_tpm
+metabolicgenes_tpm_binary[metabolicgenes_tpm_binary > 0] <- 1 
+metabolicgenes_tpm_binary[metabolicgenes_tpm_binary <= 0] <-0
+metabolicgenes_sumpersample<-colSums(metabolicgenes_tpm_binary)%>%as.data.frame()
+colnames(metabolicgenes_sumpersample)<-c("count")
+metabolicgenes_sumpersample$metagenes<-rownames(metabolicgenes_sumpersample)
+
+metabolicgenes_sumpersample<-metabolicgenes_sumpersample%>%filter(count>3)
+
+#extract genes present in >3 samples-
+metabolicgenes_tpm_selected<-metabolicgenes_tpm%>%dplyr::select(metabolicgenes_sumpersample$metagenes)
+
+
+#get into OTU format-
+metabolicgenes_tpm_selected_t<-t(metabolicgenes_tpm_selected)%>%as.data.frame()
+metabolicgenes_tpm_selected_t[is.na(metabolicgenes_tpm_selected_t)] <-0
+
+#calculate prevalance-
+prevelancedf = apply(X = metabolicgenes_tpm_selected_t,
+                 MARGIN = 1,
+                 FUN = function(x){sum(x > 0)})
+
+#calculate relative abundance (sumTPM)-
+totalabundance<-rowSums(metabolicgenes_tpm_selected_t)
+
+prevdf1<-cbind(prevelancedf,totalabundance)%>%as.data.frame()
+prevdf1$ghs<-rownames(prevdf1)
+prevdf1$frac_prev<-prevdf1$prevelancedf / length(metabolicgenes_tpm_selected_t)
+
+
+#extract prev-
+prevdf1_5<-prevdf1%>%filter(frac_prev>=0.05)
+prevdf1_1<-prevdf1%>%filter(frac_prev>=0.1)
+prevdf1_75<-prevdf1%>%filter(frac_prev>=0.075)
+
+#plot prevalance vs relative abundance-
+library(ggplot2)
+p<-ggplot(prevdf1, aes(totalabundance, prevelancedf / length(metabolicgenes_tpm_selected_t))) +geom_hline(yintercept = 0.05, alpha = 0.5, linetype = 2,color="red")+ geom_hline(yintercept = 0.1, alpha = 0.5, linetype = 2,color="blue")+geom_hline(yintercept = 0.075, alpha = 0.5, linetype = 2,color="black") + geom_point(size = 2, alpha = 0.7) +scale_x_log10() + labs(y="Prevalence [Frac. Samples]",x="Total Abundance", title="10%, 7.5% and 5% prevalance") #+facet_wrap(~ghs) + theme(legend.position="none")
+
+
+#Final Prevalance threshold to use for metabolic genes are-7.5% of samples
+prevalenceThreshold = 0.075 * length(metabolicgenes_tpm_selected_t)
+
+
+
+
+
+```
+NOTE1- The prevalance threshold is 2.5% and it is based on the fact that visually, there is not much difference in 1.5% threshold and 2.5% threshold. But 5% we lose out of data-points for abundant phyla also.
+
+NOTE2- The prevalance  threshold is 7.5% for GHs CAZymes, as there are a couple of data-points with higher abundance but lower prevalance in the dataset.
+
+NOTE3- The prevalance threshold of 10% for GHs CAZYmes in contigs >5000bps was used. As we are examining only a subset (most abundant) GHs for this analysis, prevalance filter to remove rare/singletons doesn't matter.
+
+NOTE4- The prevalance  threshold is 7.5% for metabolic genes. Increasing it to 10% doesn't change the analysis much as only one data-point gets removed. But to stay consistent with GH CAZymes, 7.5% was retained.
+
+
+##MAGs-add rRNA, tRNA , no.of contigs, %mapped reads per MAG-
+```{r}
+rrna<-read.csv("basicstats/all-bins-rrna.txt",header=FALSE)
+colnames(rrna)<-c("Bin.IDs","rrna_count")
+
+trna<-read.csv("basicstats/all-bins-trna.txt",header=FALSE)
+colnames(trna)<-c("Bin.IDs","trna_count")
+
+contigcount<-read.csv("basicstats/all-bins-totalcontigcount.txt",header=FALSE)
+colnames(contigcount)<-c("Bin.IDs","total_no_of_contigs")
+
+contigmax<-read.csv("basicstats/all-bins-maxcontiglength.txt",header=FALSE)
+colnames(contigmax)<-c("Bin.IDs","max_no_of_contigs")
+
+contigmean<-read.csv("basicstats/all-bins-meancontiglength.txt",header=FALSE)
+colnames(contigmean)<-c("Bin.IDs","mean_no_of_contigs")
+
+magcoverage<-read.csv("basicstats/all-bin-abundances.txt",header=TRUE,sep="\t")
+magcoverage$Bin.IDs<-paste(magcoverage$samples,magcoverage$Genomic_bins,sep=".")
+        
+        
+maginfo<-read.csv("basicstats/659mags_tableinfo.csv") 
+maginfo1<-merge(maginfo,magcoverage,by="Bin.IDs",all.x=TRUE)
+maginfo2<-merge(maginfo1,rrna,by="Bin.IDs",all.x=TRUE)
+maginfo3<-merge(maginfo2,trna,by="Bin.IDs",all.x=TRUE)
+maginfo4<-merge(maginfo3,contigcount,by="Bin.IDs",all.x=TRUE)
+maginfo5<-merge(maginfo4,contigmax,by="Bin.IDs",all.x=TRUE)
+maginfo6<-merge(maginfo5,contigmean,by="Bin.IDs",all.x=TRUE)
+maginfo6$codon_usage<-rep("codon 11",times=nrow(maginfo))
+
+maginfo6<-maginfo6%>%filter(!Bin.IDs %in% c("272-99.bin.57","272-03.bin.63","272-90.bin.161", "229-07.bin.149","301-13.bin.102"))
+write.csv(maginfo6,file="basicstats/maginfo_654bins_march2021.csv")
+###NOTE- There are 654 MAGs- 272-99.bin.57, 272-03.bin.63, 272-90.bin.161, 229-07.bin.149 and 301-13.bin.102 are removed as they donot fit into their characterized phyla in the tree topology.
+#---------------------------------------------------------------------------------------------
+##STATS-
+#Which bins have rrna present?
+maginfo6%>%select(Assembly.quality..based.on.Bowers.et.al.,rrna_count)%>%filter(rrna_count!=0)%>%nrow()
+
+print(paste0("There are ", maginfo6%>%select(Assembly.quality..based.on.Bowers.et.al.,rrna_count)%>%filter(rrna_count!=0)%>%nrow(), " MAGs with atleast one rRNA gene" ))
+
+#how many High quality bins have rrna and between 18-20 trna present?
+#rrna-
+maginfo6%>%select(Assembly.quality..based.on.Bowers.et.al.)%>%filter(Assembly.quality..based.on.Bowers.et.al.=="High quality")%>%nrow()
+
+maginfo6%>%select(Assembly.quality..based.on.Bowers.et.al.,rrna_count)%>%filter(rrna_count!=0 & Assembly.quality..based.on.Bowers.et.al.=="High quality")%>%nrow()
+
+print(paste0("Out of ", maginfo6%>%select(Assembly.quality..based.on.Bowers.et.al.)%>%filter(Assembly.quality..based.on.Bowers.et.al.=="High quality")%>%nrow(), " many High quality MAGs, only ", maginfo6%>%select(Assembly.quality..based.on.Bowers.et.al.,rrna_count)%>%filter(rrna_count!=0 & Assembly.quality..based.on.Bowers.et.al.=="High quality")%>%nrow(), " have atleast one rRNA gene" ))
+
+#trna-
+maginfo6%>%select(Assembly.quality..based.on.Bowers.et.al.)%>%filter(Assembly.quality..based.on.Bowers.et.al.=="High quality")%>%nrow()
+
+maginfo6%>%select(Assembly.quality..based.on.Bowers.et.al.,trna_count)%>%filter(trna_count>=18 & Assembly.quality..based.on.Bowers.et.al.=="High quality")%>%nrow()
+
+print(paste0("Out of ", maginfo6%>%select(Assembly.quality..based.on.Bowers.et.al.)%>%filter(Assembly.quality..based.on.Bowers.et.al.=="High quality")%>%nrow(), " many High quality MAGs, ", maginfo6%>%select(Assembly.quality..based.on.Bowers.et.al.,trna_count)%>%filter(trna_count>=18 & Assembly.quality..based.on.Bowers.et.al.=="High quality")%>%nrow(), " have more than equal to 18 tRNAs present"))
+
+#how many Low quality bins have rrna and trna present?
+
+#rrna-
+maginfo6%>%select(Assembly.quality..based.on.Bowers.et.al.)%>%filter(Assembly.quality..based.on.Bowers.et.al.=="Low quality")%>%nrow()
+
+maginfo6%>%select(Assembly.quality..based.on.Bowers.et.al.,rrna_count)%>%filter(rrna_count!=0 & Assembly.quality..based.on.Bowers.et.al.=="Low quality")%>%nrow()
+
+print(paste0("Out of ", maginfo6%>%select(Assembly.quality..based.on.Bowers.et.al.)%>%filter(Assembly.quality..based.on.Bowers.et.al.=="Low quality")%>%nrow(), " Low quality MAGs, only ", maginfo6%>%select(Assembly.quality..based.on.Bowers.et.al.,rrna_count)%>%filter(rrna_count!=0 & Assembly.quality..based.on.Bowers.et.al.=="Low quality")%>%nrow(), " have atleast one rRNA gene" ))
+
+#trna-
+maginfo6%>%select(Assembly.quality..based.on.Bowers.et.al.)%>%filter(Assembly.quality..based.on.Bowers.et.al.=="Low quality")%>%nrow()
+
+maginfo6%>%select(Assembly.quality..based.on.Bowers.et.al.,trna_count)%>%filter(trna_count>=18 & Assembly.quality..based.on.Bowers.et.al.=="Low quality")%>%nrow()
+
+print(paste0("Out of ", maginfo6%>%select(Assembly.quality..based.on.Bowers.et.al.)%>%filter(Assembly.quality..based.on.Bowers.et.al.=="Low quality")%>%nrow(), "  Low quality MAGs, ", maginfo6%>%select(Assembly.quality..based.on.Bowers.et.al.,trna_count)%>%filter(trna_count>=10 & Assembly.quality..based.on.Bowers.et.al.=="Low quality")%>%nrow(), " have more than equal to 10 tRNAs present"))
+
+#completeness and contamination info-
+print(paste0("The min. completeness of MAGs is ",min(maginfo6$Completeness)))
+print(paste0("The max. completeness of MAGs is ",max(maginfo6$Completeness)))
+
+print(paste0("The min. contamination of MAGs is ",min(maginfo6$Contamination)))
+print(paste0("The max. contamination of MAGs is ",min(maginfo6$Contamination)))
+
+
+#no. of phyla present-
+print(paste0("There are ",maginfo6%>%filter(Domain=="Bacteria")%>%select(Domain,Phyla)%>%unique()%>%nrow(), " bacterial phyla in MAGs"))
+print(paste0("There are ",maginfo6%>%filter(Domain=="Archaea")%>%select(Domain,Phyla)%>%unique()%>%nrow(), " archaeal phyla in MAGs"))
+
+```
+
+##MAGs pathways basic stats-
+```{r}
+##1. PULS-
+puls<-read.csv("basicstats/bins_pulnames_478mags_expandedversion_jan2021.csv")
+puls<-puls%>%filter(!binname %in% c("272-99.bin.57","272-03.bin.63","272-90.bin.161", "229-07.bin.149","301-13.bin.102")) #present in 654 mags
+
+print(paste0("There are ",puls%>%select(pulname)%>%unique()%>%nrow(), " PUL families in our MAGs"))
+print(paste0("The PULS are distributed in ",puls%>%select(binname)%>%unique()%>%nrow(), " MAGs"))
+
+#distribution per phyla-
+puls%>%select(binname,phyla)%>%unique()%>%group_by(phyla)%>%count()
+
+puls%>%filter(phyla=="Bacteroidota")%>%select(binname,phyla,susC,susD)
+
+#do all the PULS in Bacteroidota phyla have a unique susCD pair?
+bacteroides_puls<-puls%>%filter(phyla=="Bacteroidota") 
+
+bacteroides_puls_counts<-bacteroides_puls%>%select(binname,pulname)%>%group_by(binname)%>%count()
+bacteroides_puls_suscd<-bacteroides_puls%>%select(binname,susC,susD)%>%unique()
+
+bacteroides_puls_counts_sus<-merge(bacteroides_puls_counts,bacteroides_puls_suscd,by="binname")
+
+print(paste0("There are ",bacteroides_puls_counts_sus%>%filter(n==susC & n==susD)%>%nrow(), " MAGs with same no. of susCD as PULs"))
+
+#how many PULs have more than one susbtrate with incomplete no.of PUL components?
+puls%>%filter(difference>0 &susbtratecount >1)%>%select(binname,pulname)%>%unique()%>%nrow()
+puls%>%filter(difference>0 &susbtratecount >1)%>%select(binname)%>%unique()%>%nrow()
+
+print(paste0("There are ", puls%>%filter(difference>0 &susbtratecount >1)%>%select(binname,pulname)%>%unique()%>%nrow(), " PULs, in ", puls%>%filter(difference>0 &susbtratecount >1)%>%select(binname)%>%unique()%>%nrow(), " MAGs with more than 1 substrate specificity but incomplete no. of PUL components"))
+
+
+#how many PULs have more than one substrate with complete no. of PUL components?
+print(paste0("There are ", puls%>%filter(difference==0 &susbtratecount >1)%>%select(binname,pulname)%>%unique()%>%nrow(), " PULs, in ", puls%>%filter(difference==0 &susbtratecount >1)%>%select(binname)%>%unique()%>%nrow(), " MAGs with more than 1 substrate specificity and complete no. of PUL components"))
+
+#how many PULs have one substrate and complete no. of PUL components?
+
+print(paste0("There are ", puls%>%filter(difference==0 &susbtratecount ==1)%>%select(binname,pulname)%>%unique()%>%nrow(), " PULs, in ", puls%>%filter(difference==0 &susbtratecount ==1)%>%select(binname)%>%unique()%>%nrow(), " MAGs with  1 substrate specificity and complete no. of PUL components"))
+
+print(paste0("There are ", puls%>%filter(difference==0)%>%select(binname,pulname)%>%unique()%>%nrow(), " PULs, in ", puls%>%filter(difference==0)%>%select(binname)%>%unique()%>%nrow(), " MAGs with complete no. of PUL components"))
+
+#--------------------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------------
+```
+
+```{r}
+#4. Sulfate reduction
+
+sulfate<-read.csv("basicstats/mag_sulfatereduction.csv")
+sulfate$aprAB<-sulfate$AprA+sulfate$AprB
+sulfate$dsrAB<-sulfate$DsrA+sulfate$DsrB
+#convert sum to 0-1 scale-
+sulfate<-sulfate%>%mutate(aprAB_2=ifelse(aprAB==2,1,ifelse(aprAB>0 & aprAB<2,0.5,0)))
+sulfate<-sulfate%>%mutate(dsrAB_2=ifelse(dsrAB==2,1,ifelse(dsrAB>0 & dsrAB<2,0.5,0)))
+sulfate2<-sulfate%>%select("BinID","aprAB_2","SAT" ,"dsrAB_2")
+write.csv(sulfate2,file="sulfatereduction_summedbygenes_march2021.csv")
+
+sulfate2$totalsum<-sulfate2$SAT+sulfate2$aprAB_2+sulfate2$dsrAB_2
+
+#how many have complete pathway?
+sulfate2%>%filter(totalsum==3)
+
+#termite species of sulfate reducing mags?
+sulfate_mag<-merge(maginfo,sulfate2,by.x="Bin.IDs",by.y="BinID")
+
+sulfate_mag%>%filter(totalsum==3)
+
+#----------------------------------------------------------------------------------------------------------
+#----------------------------------------------------------------------------------------------------------
+```
+
+```{r}
+##2. REDUCTIVE ACETOGENESIS-
+
+reductive<-read.csv("basicstats/mag_reductiveacetogenesis.csv")
+#join subunits per gene-
+reductive$acsABCDE<-(reductive$acsA+reductive$acsB+reductive$acsC+reductive$acsD+reductive$acsE)
+#convert sum to 0-1 scale-
+reductive<-reductive%>%mutate(acsABCDE_2=ifelse(acsABCDE==5,1,ifelse(acsABCDE>0 & acsABCDE<5,0.5,0)))
+reductive2<-reductive%>%select("Bin.IDs","fhs","folD","ftcD","metF","fdhF1","pta","ack","acsABCDE_2")
+#add all gene counts-
+reductive2$totalsum<-reductive2$fhs+reductive2$folD+reductive2$ftcD+reductive2$metF+reductive2$fdhF1+reductive2$pta+reductive2$ack+reductive2$acsABCDE_2
+#arrange in desc order-
+reductive2<-reductive2%>%arrange(desc(totalsum))
+#add MAG info-
+maginfo<-read.csv("basicstats/maginfo_654bins_march2021.csv")
+reductive_mags<-merge(reductive2,maginfo,by="Bin.IDs")
+
+#get MAGs with more than 5 reductive genes-
+reductive_mags2<-reductive_mags%>%filter(totalsum>=5)
+write.csv(reductive_mags2,file="reductiveacetogenesis_summedbygenes_march2021.csv")
+
+#supplementary table S12-
+reductive_sup<-merge(reductive,maginfo,by="Bin.IDs")
+write.csv(reductive_sup,file="reductiveacetogenesis_supptable12.csv")
+#-------------------------------------------------------------------------------------------------
+##STATS-
+
+#how many mags have more than 5 genes present?
+print(paste0("There are ",reductive_mags2%>%filter(totalsum>=5)%>%select(Bin.IDs)%>%nrow(), " MAGs with more than equal to 5 gene-families of Reductive acetogenesis"))
+
+#how many termite families are present in these MAGs?
+print(paste0("There are ", reductive_mags2%>%select(Termite.family)%>%unique()%>%nrow(), " termite families present in Reductive acetogenesis mags. The families are-" ))
+reductive_mags2%>%select(Termite.family)%>%unique()
+
+#how many phyla are present?
+reductive_mags2%>%select(Phyla)%>%group_by(Phyla)%>%count()
+
+#what is the max. no of reductive acetogenesis genes found per MAG-
+max(reductive_mags2$totalsum)
+
+#how many Desulfobacterota MAGs lack sulfate reduction pathway?
+reductive_mags2%>%filter(Phyla=="Desulfobacterota"& Bin.IDs %in% sulfate2$BinID)%>%nrow()
+reductive_mags2%>%filter(Phyla=="Desulfobacterota")%>%nrow()
+
+print(paste0("There are", reductive_mags2%>%filter(Phyla=="Desulfobacterota")%>%nrow(), " Desulfobacterota MAGs, out of which", reductive_mags2%>%filter(Phyla=="Desulfobacterota"& Bin.IDs %in% sulfate2$BinID)%>%nrow(), " has sulfate reducing aprAB genes"))
+
+#how many MAGs have complete aCSABCDE genefamily?
+reductive_mags2%>%filter(acsABCDE_2==1)%>%nrow()
+reductive_mags2%>%filter(acsABCDE_2==1)%>%select(Phyla,Class,Order,Family,Genus)
+#----------------------------------------------------------------------------------------------------------
+#----------------------------------------------------------------------------------------------------------
+```
+
+```{r}
+#3. Methanogenesis
+
+methano<-read.csv("basicstats/mag_methanogenesis.csv")
+
+#sum by subunit-
+methano$mcrCD<-methano$mcrC+methano$mcrD
+methano$cdhCDE<-methano$cdhC+methano$cdhD+methano$cdhE
+methano$fmdABCDEFGH<-methano$fmdA+methano$fmdB+methano$fmdC+methano$fmdD+methano$fmdE+methano$fmdF+methano$fmdG+methano$fmdH
+methano$mtrABCDEFGH<-methano$mtrA+methano$mtrB+methano$mtrC+methano$mtrD+methano$mtrE+methano$mtrF+methano$mtrG+methano$mtrH
+methano$cdhAB<-methano$cdhA+methano$cdhB
+methano$mtmABC<-methano$mtbA+methano$mtmB+methano$mtmC
+methano$mtbABC<-methano$mtbA+methano$mtbB+methano$mtbC
+methano$mttABC<-methano$mtbA+methano$mttB+methano$mttC
+methano$mtaABC<-methano$mtaA+methano$mtaB+methano$mtaC
+
+methano3<-methano%>%select(BinID,mcrABG,mcrCD,cdhCDE,acs,ack,pta,fmdABCDEFGH,ftr,mch,hmd,mtd,mer,mtrABCDEFGH,cdhAB,fae.hps,mtmABC,mtbABC,mttABC,mtaABC)
+
+#convert sum to 0-1 scale-
+methano3<-methano3%>%mutate(mcrABG_2=ifelse(mcrABG==3,1,ifelse(mcrABG>0 & mcrABG<3,0.5,0)))
+methano3<-methano3%>%mutate(mcrCD_2=ifelse(mcrCD==2,1,ifelse(mcrCD>0 & mcrCD<2,0.5,0)))
+methano3<-methano3%>%mutate(cdhCDE_2=ifelse(cdhCDE==3,1,ifelse(cdhCDE>0 & cdhCDE<3,0.5,0)))
+methano3<-methano3%>%mutate(fmdABCDEFGH_2=ifelse(fmdABCDEFGH==8,1,ifelse(fmdABCDEFGH>0 & fmdABCDEFGH<8,0.5,0)))
+methano3<-methano3%>%mutate(mtrABCDEFGH_2=ifelse(mtrABCDEFGH==8,1,ifelse(mtrABCDEFGH>0 & mtrABCDEFGH<8,0.5,0)))
+methano3<-methano3%>%mutate(cdhAB_2=ifelse(cdhAB==2,1,ifelse(cdhAB>0 & cdhAB<2,0.5,0)))
+methano3<-methano3%>%mutate(mtmABC_2=ifelse(mtmABC==3,1,ifelse(mtmABC>0 & mtmABC<3,0.5,0)))
+methano3<-methano3%>%mutate(mtbABC_2=ifelse(mtbABC==3,1,ifelse(mtbABC>0 & mtbABC<3,0.5,0)))
+methano3<-methano3%>%mutate(mttABC_2=ifelse(mttABC==3,1,ifelse(mttABC>0 & mttABC<3,0.5,0)))
+methano3<-methano3%>%mutate(mtaABC_2=ifelse(mtaABC==3,1,ifelse(mtaABC>0 & mtaABC<3,0.5,0)))
+
+methano3<-methano3%>%select(BinID,mcrABG_2,mcrCD_2,cdhCDE_2,acs,ack,pta,fmdABCDEFGH_2,ftr,mch,hmd,mtd,mer,mtrABCDEFGH_2,cdhAB_2,fae.hps,mtmABC_2,mtbABC_2,mttABC_2,mtaABC_2)
+write.csv(methano3,file="methanogenesis_summedbygenes_march2021.csv")
+
+##STATS-
+#how many archaeal mags are there?
+maginfo<-read.csv("basicstats/maginfo_654bins_march2021.csv")
+maginfo%>%filter(Domain=="Archaea")%>%nrow()
+
+#how many termite species are the archaeal mags distributed in?
+maginfo%>%filter(Domain=="Archaea")%>%select(Termites.species.name)%>%unique()%>%nrow()
+
+
+methano2<-merge(methano,maginfo,by.x="BinID",by.y="Bin.IDs")
+
+#how many mags have mcrABG genes?
+methano2%>%filter(mcrA==1 & mcrB==1 & mcrG==1)%>%nrow()
+methano2%>%filter(mcrA==1 & mcrB==1 & mcrG==1)%>%select(Order)%>%unique()
+
+#how many mags have complete methanogenesis pathway?
+methano_complete<-methano2%>%filter( carbon_methano==22 | monoamine_methano==3| diamine_methano==3| triamine_methano==3|methane_methano==3)
+methano_complete<-methano_complete%>%filter(mcrABG==3)
+
+print(paste0("There are" ,nrow(methano_complete), " Archaeal MAGs with complete methanogenesis pathway"))
+
+#phyla distribution for each pathway-
+methano_complete%>%filter(mcrABG==3 & methane_methano==3)%>%select(Phyla,Class,Order,Family,Genus) #methane
+
+methano_complete%>%filter(mcrABG==3 & monoamine_methano==3| diamine_methano==3|  triamine_methano==3)%>%select(Phyla,Class,Order,Family,Genus)#methylamines
+
+methano_complete%>%filter(mcrABG==3 & carbon_methano==22)%>%select(Phyla,Class,Order,Family,Genus) #co2
+
+methano_complete%>%filter(mcrABG==3 & carbon_methano==22 &acetogeneic_methano==4 )%>%select(Phyla,Class,Order,Family,Genus) #acetate
+#----------------------------------------------------------------------------------------------------------
+#----------------------------------------------------------------------------------------------------------
+```
+
+
+
+```{r}
+##5. Nitrogen metabolism-
+
+nitrogen<-read.csv("basicstats/mag_nitrogenmetabolism.csv")
+
+nitrogen$nifHDKENB<-nitrogen$nifD+nitrogen$nifK+nitrogen$nifH+nitrogen$nifE+nitrogen$nifN+nitrogen$nifB
+nitrogen$narGHI<-nitrogen$narG+nitrogen$narH+nitrogen$narI
+nitrogen$napAB<-nitrogen$napA+nitrogen$napB
+nitrogen$nirBD<-nitrogen$nirB+nitrogen$nirD
+nitrogen$nrfAH<-nitrogen$nrfA+nitrogen$nrfH
+nitrogen$ureABC<-nitrogen$UreA+nitrogen$UreB+nitrogen$UreC
+nitrogen$glutamate<-nitrogen$glnA+nitrogen$gltB+nitrogen$gltD
+nitrogen$urtABC<-nitrogen$UrtA+nitrogen$UrtB+nitrogen$UrtC+nitrogen$UrtD+nitrogen$UrtE
+nitrogen$arginine<-nitrogen$arcC+nitrogen$argF+nitrogen$argG+nitrogen$argH
+
+nitrogen_mag<-merge(nitrogen,maginfo,by.x="BinID",by.y="Bin.IDs")
+
+#how many mags have ureABC gene? and which phyla do they belong to?
+nitrogen_mag%>%filter(ureABC==3)%>%nrow()
+
+nitrogen_mag%>%filter(ureABC==3)%>%select(Phyla)
+
+#how many mags have dissimilatory nitrate reduction? and which phyla do they belong to?
+nitrogen_mag%>%filter(narGHI==3 &nirBD==2 | narGHI==3 & nrfAH==2 | napAB==2 & nirBD==2 | napAB==2 & nrfAH==2)%>%nrow()
+
+nitrogen_mag%>%filter(narGHI==3 &nirBD==2 | narGHI==3 & nrfAH==2 | napAB==2 & nirBD==2 | napAB==2 & nrfAH==2)%>%select(Phyla)
+
+#Is there a MAG common in ureABC and dissimilatory nitrate reduction?
+nitrogen_mag%>%filter(ureABC==3)%>%filter(Phyla=="Firmicutes")
+nitrogen_mag%>%filter(narGHI==3 &nirBD==2 | narGHI==3 & nrfAH==2 | napAB==2 & nirBD==2 | napAB==2 & nrfAH==2)%>%filter(Phyla=="Firmicutes")
+
+#how many mags have glutamate and arginine biosynthesis pathway?
+nitrogen_mag%>%filter(glutamate==3)%>%nrow()
+nitrogen_mag%>%filter(arginine==4)%>%nrow()
+nitrogen_mag%>%filter(glutamate==3 & arginine==4)%>%nrow()
+
+#how many glutamate, arginine containing pathways have amtB pathway?
+nitrogen_mag%>%filter(glutamate==3 & AmtB==1)%>%nrow()
+nitrogen_mag%>%filter(arginine==4& AmtB==1)%>%nrow()
+
+#how many phyla they belong to?
+arginine_amt<-nitrogen_mag%>%filter(arginine==4& AmtB==1)%>%select(Phyla)%>%group_by(Phyla)%>%count()
+glutamate_amt<-nitrogen_mag%>%filter(glutamate==3 & AmtB==1)%>%select(Phyla)%>%group_by(Phyla)%>%count()
+arginine_glutamate_amt<-merge(arginine_amt,glutamate_amt,by="Phyla",all=TRUE)
+arginine_glutamate_amt[is.na(arginine_glutamate_amt)] <-0
+arginine_glutamate_amt$totalcount<-arginine_glutamate_amt$n.x+arginine_glutamate_amt$n.y
+
+#which families/how many families they belong to?
+nitrogen_mag%>%filter(glutamate==3 & AmtB==1 & Phyla=="Bacteroidota")%>%select(Family)
+
+arginine_amt_family<-nitrogen_mag%>%filter(arginine==4& AmtB==1 & Phyla=="Proteobacteria")%>%select(Family)%>%unique()
+glutamate_amt_family<-nitrogen_mag%>%filter(glutamate==3 & AmtB==1 & Phyla=="Proteobacteria")%>%select(Family)%>%unique()
+arginine_glutamte_amt_family<-merge(arginine_amt_family,glutamate_amt_family,by="Family",all=TRUE)
+
+nitrogen_mag%>%filter(arginine==4& AmtB==1 & Phyla=="Spirochaetota")%>%select(Family,Genus)
+nitrogen_mag%>%filter(glutamate==3 & AmtB==1 & Phyla=="Spirochaetota")%>%select(Family,Genus)
+
+nitrogen_mag%>%filter(arginine==4& AmtB==1 & Phyla=="Actinobacteriota")%>%select(Class,Order,Family,Genus)
+nitrogen_mag%>%filter(glutamate==3 & AmtB==1 & Phyla=="Actinobacteriota")%>%select(Class,Order,Family,Genus)
+
+#nifHDKENB genes-
+nitrogen_mag%>%filter(nifHDKENB==6)%>%nrow()
+nif_mag<-nitrogen_mag%>%filter(nifHDKENB==6)%>%select(Phyla)%>%unique()
+colnames(nif_mag)<-c("taxa_phyla")
+
+#how many phyla in nifHDKENB mags are not present in contig nifHDKENB?
+nitrogen_contigs<-read.csv("nifHDKENB_operon_metagenomecontigs.csv")
+nitrogen_contigs$taxa_phyla<-gsub("_c__.*$","",nitrogen_contigs$taxa)
+nitrogen_contigs<-nitrogen_contigs%>%select(taxa_phyla)%>%unique()
+nitrogen_contigs$taxa_phyla<-gsub("d__Bacteria_p__","",nitrogen_contigs$taxa_phyla)
+nitrogen_contigs$taxa_phyla<-gsub("d__Archaea_p__","",nitrogen_contigs$taxa_phyla)
+
+nif_mag_contig<-anti_join(nif_mag,nitrogen_contigs, by="taxa_phyla")
+
+#how many MAGs of phyla unique to mags are there?
+nitrogen_mag%>%filter(nifHDKENB==6 & Phyla %in% c("Actinobacteriota","FirmicutesC","Planctomycetota","Verrucomicrobiota"))%>%select(Phyla)%>%group_by(Phyla)%>%count()
+
+#which families do these MAGs belong to?
+nitrogen_mag%>%filter(nifHDKENB==6 & Phyla %in% c("Actinobacteriota","FirmicutesC","Planctomycetota","Verrucomicrobiota"))%>%select(Family)
+
+```
+
+
+##Metagenome taxonomic analysis basic stats-
+```{r}
+#how many total bacterial lineages present-
+morani<-read.csv("phylogenetic_autocorrelation_taxonomy_184columns_129samples_march2021.csv")
+morani$domain<-gsub("_p__.*$","",morani$X)
+morani_bacterial<-morani%>%filter(domain=="d__Bacteria")
+
+print(paste0("There are ", nrow(morani_bacterial), " bacterial lineages in our Phylogenetic autocorrelation analysis."))
+
+#How many phyla are present in the stats?
+familylevel<-read.csv("family_levelclassifications_markergenes.csv") #generated from Moran's I dataset. All the lineages classified at family level. Those at higher level are not included here.
+familylevel$phyla<-gsub("_c__.*$","",familylevel$family_level_classification)
+familylevel$domain<-gsub("_p__.*$","",familylevel$phyla)
+
+familylevel%>%select(phyla,domain)%>%group_by(phyla,domain)%>%count()
+familylevel%>%filter(domain=="d__Bacteria")%>%select(phyla)%>%unique()%>%count()
+
+print(paste0("There are ", familylevel%>%filter(domain=="d__Bacteria")%>%nrow(), "families in ",familylevel%>%filter(domain=="d__Bacteria")%>%select(phyla)%>%unique()%>%count(), "  bacterial phyla in marker-gene dataset."))
+
+#----------------------------------------------
+#Distribution of Archaea in all samples + Mimeutermes sample-
+taxonomy_clr<-read.csv("taxonomy_129samples_184taxa_march2021.csv",row.names = 1)
+taxonomy_rawtpm<-read.csv("metagenome-taxonomy-1000bps-bymarkersspread-rawTPM-march2021.csv",row.names=1)
+
+##how many archaeal families present in the rawTPM data in 124 samples-
+taxonomy_rawtpm$label<-NULL
+taxonomy_rawtpm$samples<-NULL
+taxonomy_rawtpm[taxonomy_rawtpm > 0] <- 1
+taxonomy_rawtpm[taxonomy_rawtpm <= 0] <-0
+taxonomy_rawtpm_morethanone<-taxonomy_rawtpm[rowSums(taxonomy_rawtpm[,])>1, ]
+
+taxonomy_rawtpm_cols<-colnames(taxonomy_rawtpm_morethanone)%>%as.data.frame()
+colnames(taxonomy_rawtpm_cols)<-c("taxa")
+taxonomy_rawtpm_cols$domain<-gsub("_p__.*$","",taxonomy_rawtpm_cols$taxa)
+taxonomy_rawtpm_cols%>%filter(domain=="d__Archaea")
+
+library(stringr)
+print(paste0("There are ",taxonomy_rawtpm_cols%>%filter(str_detect(taxa, "_f__") & domain=="d__Archaea")%>%nrow(), " archaeal families in our metagenomes, which are-"))
+taxonomy_rawtpm_cols%>%filter(str_detect(taxa, "_f__") & domain=="d__Archaea")
+
+##how many archaeal families present in statistical data of 129 samples-
+taxonomy_clr_cols<-colnames(taxonomy_clr)%>%as.data.frame()
+colnames(taxonomy_clr_cols)<-c("taxa")
+taxonomy_clr_cols$domain<-gsub("_p__.*$","",taxonomy_clr_cols$taxa)
+taxonomy_clr_cols%>%filter(domain=="d__Archaea")
+
+print(paste0("There are ",taxonomy_clr_cols%>%filter(str_detect(taxa, "_f__") & domain=="d__Archaea")%>%nrow(), " archaeal families in 2.5% of termite samples, which are-"))
+taxonomy_clr_cols%>%filter(str_detect(taxa, "_f__") & domain=="d__Archaea")
+#--------------------------------------------------------------------------------
+##Overall relative abundance of Archaea-
+taxonomy_rawtpm<-read.csv("metagenome-taxonomy-1000bps-bymarkersspread-rawTPM-march2021.csv",row.names=1)
+taxonomy_rawtpm$samples<-NULL
+taxonomy_long<-gather(taxonomy_rawtpm, taxa, tpm, -(label), factor_key=TRUE)%>%as.data.frame()
+taxonomy_long$domain<-gsub("_p__.*$","",taxonomy_long$taxa)
+taxonomy_long<-taxonomy_long%>%filter(tpm>0)
+
+library(data.table)
+setDT(taxonomy_long)
+taxonomy_long_domains<-taxonomy_long[, .(tpm = sum(tpm)), by = .(domain)]
+
+taxonomy_long_domains[2,2]/sum(taxonomy_long_domains$tpm)*100
+
+print(paste0("Proportion of Archaea in 124 metagenomes are ", taxonomy_long_domains[1,2]/sum(taxonomy_long_domains$tpm)*100 ,"%"))
+
+#-------------------------------------------------------------------------------
+##Which sample has the most relative abundance of archaea?
+
+library(data.table)
+setDT(taxonomy_long)
+taxonomy_long_sampledomains<-taxonomy_long[, .(tpm = sum(tpm)), by = .(label,domain)]
+taxonomy_long_sampledomains_archaea<-taxonomy_long_sampledomains%>%filter(domain=="d__Archaea")
+max(taxonomy_long_sampledomains_archaea$tpm)
+taxonomy_long_sampledomains_archaea%>%filter(tpm==max(taxonomy_long_sampledomains_archaea$tpm)) #extract the samplename with most archaeal TPM in it.
+
+
+
+mimeutermes<-taxonomy_long%>%filter(label %in% c("272_32-CIVT017-Nasutitermitinae-Mimeutermes_sorex"))
+mimeutermes_bathy<-mimeutermes%>%filter(str_detect(taxa, "Bathyarchaeia"))
+
+print(paste0("Proportion of Bathyarchaeia in Mimeutermes sample is ", sum(mimeutermes_bathy$tpm)/sum(mimeutermes$tpm)*100))
+
+#NOTE-Mimeutermes has the most no. of Archaeal relative abundance in all samples.
+#---------------------------------------------------------------------------------------
+##do all soil-feeders have higher Archaeal relative abundance than other diets?
+sampleinfo<-read.csv("taxonomy/sample_names_ids_withotherfactors_tomedit.2.csv")
+taxonomy_long_diet<-merge(taxonomy_long,sampleinfo,by.x="label",by.y="termite_tree_labels")
+
+library(data.table)
+setDT(taxonomy_long_diet)
+taxonomy_long_dietdomains<-taxonomy_long_diet[, .(tpm = sum(tpm)), by = .(diet_type_number4,domain)]
+taxonomy_long_dietdomains<-taxonomy_long_dietdomains%>%group_by(diet_type_number4)%>%mutate(overallsum=sum(tpm))
+taxonomy_long_dietdomains$perc<-taxonomy_long_dietdomains$tpm/taxonomy_long_dietdomains$overallsum*100
+
+taxonomy_long_dietdomains%>%filter(domain=="d__Archaea")
+
+
+#NOTE-Archaea are more abundant in soil-feeding termites, followed by fungal-cultivating termites.
+
+```
+
+##CAZYmes basic stats on overall distribution-
+```{r}
+##overall distribution of CAZymes in 129 metagenomes -
+above1000_tpm_cazymes<-read.csv("cazymes_360columns_129samples_rawTPM_march2021.csv",row.names = 1)
+above1000_tpm_cazymes$X<-rownames(above1000_tpm_cazymes)
+
+#removing zero contaning rows and columns-
+above1000_tpm_cazymes_long<-gather(above1000_tpm_cazymes, cazymes, TPM, -c(X), factor_key=TRUE)
+above1000_tpm_cazymes_long<-above1000_tpm_cazymes_long%>%filter(TPM>0)
+
+#spread the data back with no zero values-
+above1000_tpm_cazymes_nozero<- above1000_tpm_cazymes_long %>% spread(cazymes,TPM)
+
+#extract cazymes present-
+cazymes<-as.data.frame(colnames(above1000_tpm_cazymes_nozero))
+colnames(cazymes)<-c("annotation")
+#cazymes<-cazymes%>%filter(annotation!="SLH.hmm")
+cazymes<-cazymes%>%mutate(types=ifelse(grepl("AA", annotation),"AA",ifelse(grepl("GT",annotation),"GT",ifelse(grepl("CBM",annotation),"CBM",ifelse(grepl("GH",annotation),"GH",ifelse(grepl("CE",annotation),"CE","PL"))))))
+cazymes<-cazymes%>%filter(annotation!="X")
+cazymes%>%select(types)%>%group_by(types)%>%count()
+
+#how many samples are present in rawTPM data (only removing zero columns)-
+originaldf<-as.data.frame(above1000_tpm_cazymes$X)
+colnames(originaldf)<-c("sample_names")
+
+nonzerodf<-as.data.frame(above1000_tpm_cazymes_nozero$X)
+colnames(nonzerodf)<-c("sample_names")
+
+notjoined<-anti_join(originaldf,nonzerodf,by="sample_names")
+
+print(paste0("There are " , nrow(nonzerodf), " no. of samples after removing zero values. This equals the clr transformed dataset. Sample removed is ", notjoined[1,1]))
+
+##NOTE- Sample 301-52 contains CAZymes, but they are either present in contigs shorter than 1000bps or are not microbial. This was checked manually for this sample.
+#-----------------------------------------------------------------------------
+##total no. of families per metagenomes-
+above1000_tpm_cazymes<-read.csv("cazymes_360columns_129samples_rawTPM_march2021.csv",row.names = 1)
+above1000_tpm_cazymes$X<-rownames(above1000_tpm_cazymes)
+above1000_tpm_cazymes[is.na(above1000_tpm_cazymes)] <-0
+
+#removing zero contaning rows and columns-
+above1000_tpm_cazymes_long<-gather(above1000_tpm_cazymes, cazymes, TPM, -c(X), factor_key=TRUE)
+above1000_tpm_cazymes_long<-above1000_tpm_cazymes_long%>%filter(TPM>0)
+
+above1000_tpm_cazymes_long_count<-above1000_tpm_cazymes_long%>%select(X)%>%group_by(X)%>%count()
+colnames(above1000_tpm_cazymes_long_count)<-c("X","freq")
+#write.csv(above1000_tpm_cazymes_long_count,file="cazymes_overallcountpersample_feb2021.csv") 
+
+print(paste0("minimum no.of cazymes in 129 metagenomes are ", min(above1000_tpm_cazymes_long_count$freq)))
+
+print(paste0("maximum no. of cazymes in 129 metagenomes are ", max(above1000_tpm_cazymes_long_count$freq)))
+
+#-----------------------------------------------------------------------
+#perc abundance of GH families in metagenomes-
+
+above1000_tpm_cazymes<-read.csv("cazymes_360columns_129samples_rawTPM_march2021.csv",row.names = 1)
+above1000_tpm_cazymes$X<-rownames(above1000_tpm_cazymes)
+above1000_tpm_cazymes[is.na(above1000_tpm_cazymes)] <-0
+
+#removing zero contaning rows and columns-
+above1000_tpm_cazymes_long<-gather(above1000_tpm_cazymes, cazymes, TPM, -c(X), factor_key=TRUE)
+above1000_tpm_cazymes_long<-above1000_tpm_cazymes_long%>%filter(TPM>0)
+
+#spread the data back with no zero values-
+above1000_tpm_cazymes_nozero<- above1000_tpm_cazymes_long %>% spread(cazymes,TPM)
+rownames(above1000_tpm_cazymes_nozero)<-above1000_tpm_cazymes_nozero$X
+above1000_tpm_cazymes_nozero$X<-NULL
+
+write.csv(above1000_tpm_cazymes_nozero,file="cazymes_346columns_128samples_rawTPM_march2021.csv")
+
+#convert everything to binary-
+above1000_tpm_cazymes_nozero[is.na(above1000_tpm_cazymes_nozero)] <-0 #convert NA to zero
+above1000_tpm_cazymes_nozero[above1000_tpm_cazymes_nozero > 0] <- 1 
+above1000_tpm_cazymes_nozero[above1000_tpm_cazymes_nozero <= 0] <-0
+
+#calculate distribution of cazymes-percolumn sum-
+columnsums<-colSums(above1000_tpm_cazymes_nozero)%>%as.data.frame()
+colnames(columnsums)<-c("count")
+columnsums$total<-rep(nrow(above1000_tpm_cazymes_nozero),nrow(columnsums)) #total no of termite samples.
+columnsums$perc<-columnsums$count/columnsums$total*100
+columnsums$cazymes<-rownames(columnsums)
+
+
+columnsums<-columnsums%>%mutate(types=ifelse(grepl("AA", cazymes),"AA",ifelse(grepl("GT",cazymes),"GT",ifelse(grepl("CBM",cazymes),"CBM",ifelse(grepl("GH",cazymes),"GH",ifelse(grepl("CE",cazymes),"CE","PL"))))))
+
+columnsums%>%filter(types=="GH" & perc >=85)
+columnsums%>%filter(types=="GH" & perc >=75)
+columnsums%>%filter(types=="GH" & perc <85 & perc >75)
+
+
+##NOTE- we can say that CAZymes were acquired early in evolution as 13 GHs present in 60-75% of termite species are also present in the basal termites.
+
+```
+
+##CAZYmes for diet specific distribution-
+```{r}
+
+#Generatin non-zero data  -
+above1000_tpm_cazymes<-read.csv("cazymes_360columns_129samples_rawTPM_march2021.csv")
+
+#removing zero contaning rows and columns-
+above1000_tpm_cazymes[is.na(above1000_tpm_cazymes)] <-0
+above1000_tpm_cazymes_long<-gather(above1000_tpm_cazymes, cazymes, TPM, -c(X), factor_key=TRUE)
+above1000_tpm_cazymes_long<-above1000_tpm_cazymes_long%>%filter(TPM>0)
+
+#spread the data back with no zero values-
+above1000_tpm_cazymes_nozero<- above1000_tpm_cazymes_long %>% spread(cazymes,TPM)
+rownames(above1000_tpm_cazymes_nozero)<-above1000_tpm_cazymes_nozero$X
+above1000_tpm_cazymes_nozero$X<-NULL
+above1000_tpm_cazymes_nozero[is.na(above1000_tpm_cazymes_nozero)] <-0 #convert NA to zero
+
+#convert everything to binary-
+above1000_tpm_cazymes_nozero_binary<-above1000_tpm_cazymes_nozero
+above1000_tpm_cazymes_nozero_binary[is.na(above1000_tpm_cazymes_nozero_binary)] <-0 #convert NA to zero
+above1000_tpm_cazymes_nozero_binary[above1000_tpm_cazymes_nozero_binary > 0] <- 1 
+above1000_tpm_cazymes_nozero_binary[above1000_tpm_cazymes_nozero_binary <= 0] <-0
+
+print(paste0("There are ", ncol(above1000_tpm_cazymes_nozero_binary), " many CAZYmes in the metagenomes"))
+#-------------------------------------------------------------------------------
+
+## Overall distribution per diet-
+above1000_tpm_cazymes_nozero_binary_rows<-above1000_tpm_cazymes_nozero_binary %>% mutate(sumVar = rowSums(.[1:ncol(above1000_tpm_cazymes_nozero_binary)]))
+rownames(above1000_tpm_cazymes_nozero_binary_rows)<-rownames(above1000_tpm_cazymes_nozero_binary)
+above1000_tpm_cazymes_nozero_binary_rows<-above1000_tpm_cazymes_nozero_binary_rows%>%select(sumVar)
+
+above1000_tpm_cazymes_nozero_binary_rows$X<-rownames(above1000_tpm_cazymes_nozero_binary_rows)
+
+sampleinfo<-read.csv("taxonomy/sample_names_ids_withotherfactors_tomedit.2.csv")
+above1000_tpm_cazymes_nozero_binary_rows<-merge(above1000_tpm_cazymes_nozero_binary_rows,sampleinfo,by.x="X",by.y="termite_tree_labels")
+
+setDT(above1000_tpm_cazymes_nozero_binary_rows)
+binarycazymes_diet<-above1000_tpm_cazymes_nozero_binary_rows[, .(sumVar = sum(sumVar)), by = .(diet_type_number4)]
+
+
+head(binarycazymes_diet,5)
+#--------------------------------------------------------------------------------
+#relative abundance of cazymes by diet-
+above1000_tpm_cazymes_nozero_rows<-above1000_tpm_cazymes_nozero %>% mutate(sumVar = rowSums(.[1:ncol(above1000_tpm_cazymes_nozero)]))
+rownames(above1000_tpm_cazymes_nozero_rows)<-rownames(above1000_tpm_cazymes_nozero)
+above1000_tpm_cazymes_nozero_rows<-above1000_tpm_cazymes_nozero_rows%>%select(sumVar)
+
+above1000_tpm_cazymes_nozero_rows$X<-rownames(above1000_tpm_cazymes_nozero_rows)
+
+
+sampleinfo<-read.csv("taxonomy/sample_names_ids_withotherfactors_tomedit.2.csv")
+above1000_tpm_cazymes_nozero_rows<-merge(above1000_tpm_cazymes_nozero_rows,sampleinfo,by.x="X",by.y="termite_tree_labels")
+
+setDT(above1000_tpm_cazymes_nozero_rows)
+relativecazymes_diet<-above1000_tpm_cazymes_nozero_rows[, .(sumVar = sum(sumVar)), by = .(diet_type_number4)]
+
+
+head(relativecazymes_diet,5)
+ 
+
+##NOTE- both tables, binary counts of CAZYmes in 4 diets and relative abundance of CAZYmes in 4 diets show that diet1 and diet2 are have more CAZYmes than diet3 and diet5.
+#---------------------------------------------------------------------------------
+
+```
+
+
+##Hydrogenases-
+```{r}
+
+#what is the relative abundance of hydrogenases in the metagenomes?
+hydrogenases<-read.csv("metabolic_pathways_rawtpm_march2021.csv")
+hydrogenases[is.na(hydrogenases)] <-0
+
+#get 126 samples out-as basic stats should match the phylo stats-
+library(ape)
+tree<-read.tree("1000bps_taxonomy_126taxa_tree.nwk")
+dnew2<-data.frame(label=tree$tip.label)
+
+dnew2$label<-as.character(dnew2$label)
+dnew2$runnumber<-unlist(lapply(strsplit(dnew2$label,split="-"),"[",1))
+dnew2$runnumber<-gsub("_","-",dnew2$runnumber)
+
+hydrogenases<-merge(hydrogenases,dnew2,by.x="X",by.y="label",all.y=TRUE)
+rownames(hydrogenases)<-hydrogenases$X
+
+
+fefe_overallsum<-sum(hydrogenases$GroupA)+sum(hydrogenases$GroupB)+sum(hydrogenases$GroupC)
+nife_overallsum<-sum(hydrogenases$Group1)+sum(hydrogenases$Group2)
+hydrogenases_overallsum<-fefe_overallsum+nife_overallsum
+
+print(paste0("Overall abundance of FeFe hydrogenases is ", fefe_overallsum/(nife_overallsum) , " fold more than NiFe hydrogenases"))
+
+
+print(paste0("Overall abundance of GroupA FeFe hydrogenases is ", sum(hydrogenases$GroupA)/fefe_overallsum*100))
+print(paste0("Overall abundance of GroupB FeFe hydrogenases is ", sum(hydrogenases$GroupB)/fefe_overallsum*100))
+print(paste0("Overall abundance of GroupC FeFe hydrogenases is ", sum(hydrogenases$GroupC)/fefe_overallsum*100))
+
+print(paste0("Overall abundance of Group1 NiFe hydrogenases is ", sum(hydrogenases$Group1)/nife_overallsum*100))
+print(paste0("Overall abundance of Group2 NiFe hydrogenases is ", sum(hydrogenases$Group2)/nife_overallsum*100))
+
+
+#across diets-
+#distribution of hydrogenases across termite lineages-
+##select hydrogenases, remove termite samples with zero values
+hydrogenases2<-hydrogenases%>%select(GroupA,GroupB,GroupC,Group1,Group2)%>%filter_all(any_vars(. != 0)) 
+hydrogenases2$X<-rownames(hydrogenases2)
+
+sampleinfo<-read.csv("taxonomy/sample_names_ids_withotherfactors_tomedit.2.csv")
+sampleinfo<-sampleinfo%>%select(termite_tree_labels,diet_type_number4,lineage,lineage2)
+
+hydrogenases2<-merge(hydrogenases2,sampleinfo,by.x="X",by.y="termite_tree_labels")
+hydrogenases2%>%select(lineage)%>%group_by(lineage)%>%count()
+#--------------------------------------------------------------------------------------
+#NiFe sub-classification-
+functions_bacteria_genes_spread<-read.csv("bacterial_functionalgenes_all_march2021.csv")
+#functions_bacteria_genes_spread<-as.data.frame(spread(functions_bacteria_genes,annotation,TPM))
+#rownames(functions_bacteria_genes_spread)<-functions_bacteria_genes_spread$sample_names
+functions_bacteria_genes_spread[is.na(functions_bacteria_genes_spread)] <-0
+
+#get 126 samples out-
+tree<-read.tree("1000bps_taxonomy_126taxa_tree.nwk")
+dnew2<-data.frame(label=tree$tip.label)
+
+dnew2$label<-as.character(dnew2$label)
+dnew2$runnumber<-unlist(lapply(strsplit(dnew2$label,split="-"),"[",1))
+dnew2$runnumber<-gsub("_","-",dnew2$runnumber)
+
+functions_bacteria_genes_spread2<-merge(functions_bacteria_genes_spread,dnew2,by.x="sample_names",by.y="runnumber",all.y=TRUE)
+rownames(functions_bacteria_genes_spread2)<-functions_bacteria_genes_spread2$label
+
+functions_bacteria_genes_spread2[is.na(functions_bacteria_genes_spread2)] <-0
+rownames(functions_bacteria_genes_spread2)<-functions_bacteria_genes_spread2$X
+
+#get the NiFe groups out-
+columns<-colnames(functions_bacteria_genes_spread2)%>%as.data.frame()
+colnames(columns)<-c("cols")
+nifecols<-columns%>%filter(str_detect(cols, "NiFe"))%>%as.vector()
+
+#extract NiFe sub-classifications out-
+nife_group1d<-functions_bacteria_genes_spread2%>%select("X.NiFe..Group.1d")
+nife_allgroups<-functions_bacteria_genes_spread2%>%select(nifecols$cols)
+
+allnife<-sum(nife_allgroups$X.NiFe..Group.1a)+sum(nife_allgroups$X.NiFe..Group.1b)+sum(nife_allgroups$X.NiFe..Group.1c)+sum(nife_allgroups$X.NiFe..Group.1d)+sum(nife_allgroups$X.NiFe..Group.1f)+sum(nife_allgroups$X.NiFe..Group.1i)+sum(nife_allgroups$X.NiFe..Group.2b)+sum(nife_allgroups$X.NiFe..Group.3a)+sum(nife_allgroups$X.NiFe..Group.3b)+sum(nife_allgroups$X.NiFe..Group.3d)+sum(nife_allgroups$X.NiFe..Group.4a)+sum(nife_allgroups$X.NiFe..Group.4c)+sum(nife_allgroups$X.NiFe..Group.4e)+sum(nife_allgroups$X.NiFe..Group.4g)
+
+allnifegroup1<-sum(nife_allgroups$X.NiFe..Group.1a)+sum(nife_allgroups$X.NiFe..Group.1b)+sum(nife_allgroups$X.NiFe..Group.1c)+sum(nife_allgroups$X.NiFe..Group.1d)+sum(nife_allgroups$X.NiFe..Group.1f)+sum(nife_allgroups$X.NiFe..Group.1i)
+
+print(paste0("Percent distribution of NiFe Group 1d in 126 metagenomes are ", sum(nife_group1d$X.NiFe..Group.1d)/allnife*100, "%"))
+print(paste0("Percent distribution of NiFe Group 1d in 126 metagenomes are ", sum(nife_group1d$X.NiFe..Group.1d)/allnifegroup1*100, "%"))
+
+```
+
+##methanogenesis-
+```{r}
+##mcrABG in different diets-<clr-transformed>
+
+methano_archaea<-read.csv("mcr_archaea_march2021.csv")
+
+sampleinfo<-read.csv("taxonomy/sample_names_ids_withotherfactors_tomedit.2.csv")
+
+methano_archaea_samples<-merge(methano_archaea,sampleinfo,by.x="X",by.y="termite_tree_labels")
+setDT(methano_archaea_samples)
+methano_diet<-methano_archaea_samples[, .(mcr = sum(mcr)), by = .(diet_type_number4)]
+methano_diet$diet_type_number4<-gsub("^","diet_",methano_diet$diet_type_number4)
+rownames(methano_diet)<-methano_diet$diet_type_number4
+
+methano_diet
+#----------------------------------------------------------------------------
+##mcrABG in specific termite samples-
+methano_archaea%>%arrange(desc(mcr))%>%head(5)
+
+
+```
+
+
+##nitrogen fixation-
+```{r}
+##how many samples are nifHDK genes present?
+
+mainfuncs_tpm<-read.csv("metabolic_pathways_rawtpm_march2021.csv",row.names = 1)
+
+
+mainfuncs_tpm_nif<-mainfuncs_tpm%>%select(nif)
+mainfuncs_tpm_nif$X<-rownames(mainfuncs_tpm_nif)
+
+#what is the difference of nif genes across diet?
+sampleinfo<-read.csv("taxonomy/sample_names_ids_withotherfactors_tomedit.2.csv")
+sampleinfo<-sampleinfo%>%select(termite_tree_labels,diet_type_number4)
+
+mainfuncs_tpm_nif_diet<-merge(mainfuncs_tpm_nif,sampleinfo,by.x="X",by.y="termite_tree_labels")
+setDT(mainfuncs_tpm_nif_diet)
+mainfuncs_tpm_nif_diet2<-mainfuncs_tpm_nif_diet[, .(nif = sum(nif)), by = .(diet_type_number4)]
+
+lt_wf<-mainfuncs_tpm_nif_diet2[1,2]+mainfuncs_tpm_nif_diet2[2,2]
+lt<-mainfuncs_tpm_nif_diet2[1,2]
+wf<-mainfuncs_tpm_nif_diet2[2,2]
+sf<-mainfuncs_tpm_nif_diet2[3,2]
+fc<-mainfuncs_tpm_nif_diet2[4,2]
+
+print(paste0("LT+WF are ", (lt_wf)/sf ," fold abundant than SF"))
+print(paste0("LT+WF are ", (lt_wf)/fc ," fold abundant than FC"))
+print(paste0("LT is ", (lt)/sf ," fold abundant than SF"))
+print(paste0("LT is ", (lt)/fc ," fold abundant than FC"))
+print(paste0("WF is ", (wf)/sf ," fold abundant than SF"))
+print(paste0("WF is ", (wf)/fc ," fold abundant than FC"))
+
+
+```
+
+##16S-
+```{r}
+#s16<-read.csv("~/16Stermitespecies.csv",header=FALSE)
+#colnames(s16)<-c("species","termiteids","families")
+#s16%>%select(families)%>%group_by(families)%>%count()
+```
+
+
+
