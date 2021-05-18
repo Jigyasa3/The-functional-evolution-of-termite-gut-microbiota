@@ -127,6 +127,11 @@ file1=${files[${SLURM_ARRAY_TASK_ID}]} #it reads each index at a time
 
 ### a)if multiple KEGG IDs found per proteinID-
 ```
+#extract proteinIDs annotated with KEGGid-
+for i in *-prokka.faa-kopfam;do awk '$2 ~ /^K/ { print $0 }' ${i} > annotated-${i};done #extract rows that starts with "K" in the second column
+
+
+#remove duplicates-
 cat annotated-*kofam > all-metagenomes-kofam-annotation.txt
 
 #in R-
