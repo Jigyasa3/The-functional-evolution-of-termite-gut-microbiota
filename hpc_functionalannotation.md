@@ -174,6 +174,8 @@ module load R/3.6.1
 OUT_DIR="/flash/BourguignonU/Jigs/tpm_2021/kofam"
 Rscript ${OUT_DIR}/kofam_extract_threshold.R ${IN_DIR}/${file1} ${OUT_DIR}/selected-${file1}
 
+#join all the files together-
+cat selected* > final-all-metagenomes-multiplekofamids-annotation.txt
 ```
 
 
