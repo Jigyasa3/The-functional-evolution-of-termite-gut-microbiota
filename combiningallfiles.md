@@ -33,62 +33,72 @@ write.csv(cogs_contigs_1000above2,file="tpm_cogs_allsamples_feb2021_1000bpsconti
 ```
 library(dplyr)
 
-tpm<-read.csv("/bucket/BourguignonU/Jigs_backup/working_files/AIMS/paper1/markergenes/markers-rpkm/individualanalysis_feb2021/all-samples-prokTPM.txt",header=TRUE,sep="\t")
-tpm$fullproteinnames<-paste(tpm$file_name,tpm$gene_name,sep="_")
+tpm<-read.csv("/bucket/BourguignonU/Jigs_backup/working_files/AIMS/paper1/markergenes/markers-rpkm/individualanalysis_march2021/all-samples-salmon-tpm.txt",header=TRUE,sep="\t") #from salmon analysis
+colnames(tpm)[which(names(tpm) == "Name")] <- "fullproteinnames"
 
-cazymes<-read.csv("/bucket/BourguignonU/Jigs_backup/working_files/AIMS/paper1/markergenes/markers-rpkm/individualanalysis_feb2021/allsamples-evalue30-cazymes.txt",,header=FALSE,sep="\t")
+cazymes<-read.csv("/bucket/BourguignonU/Jigs_backup/working_files/AIMS/paper1/markergenes/markers-rpkm/individualanalysis_feb2021/allsamples-evalue30-cazymes.txt",header=FALSE,sep="\t")
 colnames(cazymes)<-c("contig_name","proteins","annotation","evalue","bitscore","samples")
 cazymes$fullproteinnames<-paste(cazymes$samples,cazymes$proteins,sep="_")
 cazymes<-cazymes%>%select(samples,proteins,annotation,fullproteinnames)
+write.csv(cazymes,file="2-allsamples-evalue30-cazymes.txt")
 
-kofam<-read.csv("/bucket/BourguignonU/Jigs_backup/working_files/AIMS/paper1/markergenes/markers-rpkm/individualanalysis_feb2021/final-all-metagenomes-multiplekofamids-annotation.txt")
+#kofam<-read.csv("/bucket/BourguignonU/Jigs_backup/working_files/AIMS/paper1/markergenes/markers-rpkm/individualanalysis_feb2021/final-all-metagenomes-multiplekofamids-annotation.txt") #for the previous version
+kofam<-read.csv("/bucket/BourguignonU/Jigs_backup/working_files/AIMS/paper1/markergenes/markers-rpkm/individualanalysis_april2021/final-all-metagenomes-individualkofamids-annotation.txt") #the newest version
 colnames(kofam)<-c("X","samples","proteins","annotation")
 kofam$fullproteinnames<-paste(kofam$samples,kofam$proteins,sep="_")
 kofam<-kofam%>%select(samples,proteins,annotation,fullproteinnames)
+write.csv(kofam,file="2-final-all-metagenomes-multiplekofamids-annotation.txt")
 
 pfam<-read.csv("/bucket/BourguignonU/Jigs_backup/working_files/AIMS/paper1/markergenes/markers-rpkm/individualanalysis_feb2021/3columns-allsamples-multiplepfamids-evalue30-pfamoutput.txt")
 colnames(pfam)<-c("X","proteins","samples","annotation")
 pfam<-pfam%>%select(samples,proteins,annotation)
 pfam$fullproteinnames<-paste(pfam$samples,pfam$proteins,sep="_")
-
+write.csv(pfam,file="2-3columns-allsamples-multiplepfamids-evalue30-pfamoutput.txt")
 
 allannotations<-rbind(cazymes,kofam,pfam)%>%as.data.frame()
-allannotations_tpm<-merge(allannotations,tpm,by.x=c("fullproteinnames","proteins","samples"),by.y=c("fullproteinnames","gene_name","file_name"))
+allannotations_tpm<-merge(allannotations,tpm,by.x=c("fullproteinnames"),by.y=c("fullproteinnames"))
 write.csv(allannotations_tpm,file="allannotations_tpm.csv")
 
-taxonomy<-read.csv("/bucket/BourguignonU/Jigs_backup/working_files/AIMS/paper1/markergenes/markers-rpkm/individualanalysis_feb2021/allsamples-krakentaxonomy-feb2021.txt")
+contig_length<-read.csv("/bucket/BourguignonU/Jigs_backup/working_files/AIMS/paper1/markergenes/markers-rpkm/individualanalysis_march2021/all-contigs-readcount-jan2021.csv")
 
-allannotations_tpm_taxonomy<-merge(allannotations_tpm,taxonomy,by.x="fullnames",by.y="V1.x") #merge by contigIDs and samplenames
-write.csv(allannotations_tpm_taxonomy,file="allannotations_tpm_taxonomy.csv")
+allannotations_tpm_contiglength<-merge(allannotations_tpm,contig_length,by.x=c("samples","proteins"),by.y=c("sample_names","gene_names"))
+allannotations_tpm_contiglength$full_contig_name2<-paste(allannotations_tpm_contiglength$samples,allannotations_tpm_contiglength$contig_names,sep="_")
+write.csv(allannotations_tpm_contiglength,file="allannotations_tpm_contiglength.csv")
+
+taxonomy<-read.csv("/bucket/BourguignonU/Jigs_backup/working_files/AIMS/paper1/markergenes/markers-rpkm/individualanalysis_march2021/allsamples-taxa-gtdb-lca.txt",header=FALSE) #from GTDB lca
+library(forcats) #https://stackoverflow.com/questions/39126537/replace-na-in-a-factor-column
+taxonomy$V7<-fct_explicit_na(taxonomy$V7, "0")
+
+taxonomy2<-taxonomy%>%mutate(taxa=ifelse(V7==0,as.character(V5),as.character(V7)))
+
+allannotations_tpm_contiglength_taxonomy<-merge(allannotations_tpm_contiglength,taxonomy2,by.x="full_contig_name2",by.y="V3") #merge by samplenames_contigIDs
+write.csv(allannotations_tpm_contiglength_taxonomy,file="allannotations_tpm_contiglength_taxonomy.csv")
 
 ```
 
 ## c) Generating files for statistical analysis
 
 ```
-allannotations_tpm_taxonomy<-read.csv("allannotations_tpm_taxonomy.csv")
-allannotations_tpm_taxonomy$gene_count<-as.numeric(as.character(allannotations_tpm_taxonomy$gene_count))
-allannotations_tpm_taxonomy$prokTPM<-as.numeric(as.character(allannotations_tpm_taxonomy$prokTPM))
+allannotations_tpm_contiglength_taxonomy<-read.csv("allannotations_tpm_contiglength_taxonomy.csv")
+allannotations_tpm_contiglength_taxonomy$contig_length<-as.numeric(as.character(allannotations_tpm_contiglength_taxonomy$contig_length))
+allannotations_tpm_contiglength_taxonomy$TPM<-as.numeric(as.character(allannotations_tpm_contiglength_taxonomy$TPM))
 
-contig_length<-read.csv("/bucket/BourguignonU/Jigs_backup/working_files/AIMS/paper1/markergenes/markers-rpkm/individualanalysis_2020/all-contigs-readcount.csv")
 
-allannotations_tpm_taxonomy_contiglen<-merge(allannotations_tpm_taxonomy,contig_length,by.x=c("samples","contig_name"),by.y=c("sample_names","contig_names"))
-write.csv(allannotations_tpm_taxonomy_contiglen,file="allannotations_tpm_taxonomy_contiglen.csv")
-
-joined1<-allannotations_tpm_taxonomy_contiglen%>%filter(contig_length>=1000 & TPM>=1)
+joined1<-allannotations_tpm_contiglength_taxonomy%>%filter(contig_length>=1000 & TPM>=1)
 write.csv(joined1,file="all-metagenome-annotation-taxonomy-1000bps.txt")
 
 
 ## NOTE- for statistical analysis ensure that there are no duplicates per proteinID otherwise they will counted in summing.
+library(data.table)
 setDT(joined1)
-joined1_genes<-joined1[, .(TPM = sum(prokTPM)), by = .(samplename,annotation)]
+joined1_genes<-joined1[, .(TPM = sum(TPM)), by = .(samples,annotation)]
 write.csv(joined1_genes,file="1000bps_genes.txt")
 
-joined3<-allannotations_tpm_taxonomy_contiglen%>%filter(contig_length>=5000 & TPM>=1)
+joined3<-allannotations_tpm_contiglength_taxonomy%>%filter(contig_length>=5000 & TPM>=1)
 write.csv(joined3,file="all-metagenome-annotation-taxonomy-5000bps.txt")
 
 setDT(joined3)
-joined3_genes<-joined3[, .(TPM = sum(prokTPM)), by = .(samplename,annotation)]
+joined3_genes<-joined3[, .(TPM = sum(TPM)), by = .(samples,annotation)]
 write.csv(joined3_genes,file="5000bps_genes.txt")
 ```
 
