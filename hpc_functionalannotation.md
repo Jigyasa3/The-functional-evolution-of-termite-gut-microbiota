@@ -118,57 +118,64 @@ file1=${files[${SLURM_ARRAY_TASK_ID}]} #it reads each index at a time
 #file2=${file1/-prokka.faa/}
 #file3=${file2/.txt/}
 
-#module load hmmer/3.1b2
+module load hmmer/3.1b2
 
-/work/student/jigyasa-arora/kofamscan/bin/kofamscan-1.1.0/exec_annotation -o ${file1}-kopfamdetail ${file1} -p /work/student/jigyasa-arora/kofamscan/db/profiles -k /work/student/jigyasa-arora/kofamscan/db/ko_list --cpu 10 -f mapper --tmp-dir ${file1}-tmp
+/flash/BourguignonU/DB/kofamscan/db/bin/kofam_scan/exec_annotation -o ${OUT_DIR}/${file2}-kofamdetail ${IN_DIR}/${file1} -p /flash/BourguignonU/DB/kofamscan/db/profiles -k /flash/BourguignonU/DB/kofamscan/db/ko_list --cpu 10 -f detail-tsv --tmp-dir ${OUT_DIR}/${file2}-tmp
 #-f mapper -one can be converted to heatmap
 #-f detail -for tpm analysis
+
 ```
 
-### a)if multiple KEGG IDs found per proteinID-
+### a)To extract individual KEGG ID per proteinID- Based on threshold and E.value
 ```
-#extract proteinIDs annotated with KEGGid-
-for i in *-prokka.faa-kopfam;do awk '$2 ~ /^K/ { print $0 }' ${i} > annotated-${i};done #extract rows that starts with "K" in the second column
+## save as "kofam_extract_threshold.R"
+#USAGE- Rscript [kofam] [output_file]
+args <- commandArgs(TRUE)
+kofam <- args[1]
+output_file <- args[2]
 
 
-#remove duplicates-
-cat annotated-*kofam > all-metagenomes-kofam-annotation.txt
-
-#in R-
-kofam<-read.csv("all-metagenomes-kofam-annotation.txt",header=FALSE,sep="\t")
-
-library(data.table)
-setDT(kofam)
-kofam2<-as.data.table(kofam)[, toString(V3), by = list(V1,V2)]
-write.csv(kofam2,file="all-metagenomes-multiplekofamids-annotation.txt")
-
-colnames(kofam2)<-c("samples","proteins","kofamid")
-kofam2$sums<-count.fields(textConnection(kofam2$kofamid), sep = ",") #get the sum of kofamid column
 library(dplyr)
-kofam3<-kofam2%>%filer(sums>1)
+kofam<-read.csv(file=kofam,sep="\t",header=TRUE)
 
-library(stringr)
-kofam3%>%filter(str_detect(kofamid, "K00297")) #check for each protein annotated as lignocellulose kegg IDs if they are annotated with other ids too.
-write.csv(kofam3,file="final-all-metagenomes-multiplekofamids-annotation.txt") #after removing all the duplicate annotations. (see below)
+kolist<-read.csv("/flash/BourguignonU/DB/kofamscan/db/ko_list",header=TRUE,sep="\t")
+kolist<-kolist%>%select(knum,threshold)
+colnames(kolist)<-c("knum","kthreshold")
 
-##NOTE- proteins annotated with lignocellulose degradating pathway KEGG ids (in Suppmentary table S11) have single KEGG ID. Those that don't are listed below-
-K00395 (aprB) is also annotated as K05337 (ferrodoxin) as aprB contains 4FE-4S cluster. Not removed.
-K00266 (gltD) is also annotated as K05796 (electron transport protein HydN). They were removed.
-K00297 (metF) is annotated as K03521 and K00548. They were removed.
-K00925 (ack) is annotated as K00932. They were removed.
-K00926 (arcC) is annotated as K07491. They were removed.
-K01491 (folD) is annotated as K00949. They were removed.
-K01491 (folD) is annotated as K01945. They were removed. 
-K01915 (glnA) is annotated as K01778. They were removed. 
-K01915 (glnA) is annotated as K09470. They were removed. 
-K01938 (fhs) is annotated as K00288. They were removed. 
-K00402(mcrG) is annotated as K03421. They were removed. 
-K02591 (nifK) is annotated as  K02592. They were removed.
-K01428 (ureB) is annotated as K01427. They were removed. 
-K01429 (ureC) is annotated as K01438. They were removed.
-K03320 (amtB) is annotated as K04751. They were removed.
+#join the two files-
+kofam_klist<-merge(kofam,kolist,by.x=c("KO"),by.y=c("knum"),all.x=TRUE)
+kofam_klist$X.<-NULL
+kofam_klist<-unique(kofam_klist)
+
+#filter the KOs by their thresholds-
+kofam_klist<-kofam_klist%>%mutate(keepkos=ifelse(as.numeric(thrshld)>=as.numeric(kthreshold),"aboveandequal","less"))
+kofam_klist_selected<-kofam_klist%>%filter(keepkos=="aboveandequal")
+kofam_klist_selected$E.value<-as.numeric(as.character(kofam_klist_selected$E.value))
+
+#get one koid per geneid-by extracting the minimum evalue per geneid-
+library(data.table)
+
+setDT(kofam_klist_selected)
+kofam_unique<-kofam_klist_selected[,.SD[which.min(E.value)],by=gene.name]
+
+print(paste0("The no. of geneids= ",kofam_klist_selected%>%select(gene.name)%>%unique%>%nrow()," is equal to no.of rows in the final file ", nrow(kofam_unique)))
+
+#the no.of geneids annotated as KOID are less-awk '{print $1}' filename-301-92-kofamdetail | sort -u | uniq | wc -l
+
+write.csv(kofam_unique,file=output_file)
+
+#----------------------------------------------------------------------------------------------
+#to run the Rscript-
+files=(filename-*-kofamdetail)
+file1=${files[${SLURM_ARRAY_TASK_ID}]} #it reads each index at a time
+
+module load R/3.6.1
+
+OUT_DIR="/flash/BourguignonU/Jigs/tpm_2021/kofam"
+Rscript ${OUT_DIR}/kofam_extract_threshold.R ${IN_DIR}/${file1} ${OUT_DIR}/selected-${file1}
 
 ```
+
 
 ## Pfam annotation for hydrogenases catalytic subunit classification. Proteins were annotated with PfamA database, and those annotated as PF00374 (NiFe) or PF02906 (Fe-Fe) were further classified via https://services.birc.au.dk/hyddb/ Hydrogenases database.
 
