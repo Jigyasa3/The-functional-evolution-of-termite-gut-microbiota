@@ -126,7 +126,7 @@ module load hmmer/3.1b2
 
 ```
 
-### a)To extract individual KEGG ID per proteinID- Based on threshold and E.value. Perform threshold based filtering (A) and if the KEGGids we are examining are present (after threshold filtering) then extract them in the output file. Otherwise take the KEGGid with the lowest evalue (B).
+### a)To extract individual KEGG ID per proteinID- Based on presence of gene of interest and E.value. If the KEGGids we are examining are present then extract them in the output file. Otherwise take the KEGGid with the lowest evalue (B).
 ```
 ## save as "kofam_extract_threshold.R"
 #USAGE- Rscript [kofam] [output_file]
@@ -143,13 +143,15 @@ kolist<-kolist%>%select(knum,threshold)
 colnames(kolist)<-c("knum","kthreshold")
 
 #join the two files-
-kofam_klist<-merge(kofam,kolist,by.x=c("KO"),by.y=c("knum"),all.x=TRUE)
-kofam_klist$X.<-NULL
-kofam_klist<-unique(kofam_klist)
+#kofam_klist<-merge(kofam,kolist,by.x=c("KO"),by.y=c("knum"),all.x=TRUE)
+#kofam_klist$X.<-NULL
+#kofam_klist<-unique(kofam_klist)
 
 #(A) filter the KOs by their thresholds-
-kofam_klist<-kofam_klist%>%mutate(keepkos=ifelse(as.numeric(thrshld)>=as.numeric(kthreshold),"aboveandequal","less"))
-kofam_klist_selected<-kofam_klist%>%filter(keepkos=="aboveandequal")
+#kofam_klist<-kofam_klist%>%mutate(keepkos=ifelse(as.numeric(thrshld)>=as.numeric(kthreshold),"aboveandequal","less"))
+#kofam_klist_selected<-kofam_klist%>%filter(keepkos=="aboveandequal")
+
+kofam_klist_selected<-kofam
 kofam_klist_selected$E.value<-as.numeric(as.character(kofam_klist_selected$E.value))
 
 #get all koids per geneid in a single columns-
