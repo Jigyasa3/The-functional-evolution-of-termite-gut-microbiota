@@ -42,12 +42,9 @@ cazymes$fullproteinnames<-paste(cazymes$samples,cazymes$proteins,sep="_")
 cazymes<-cazymes%>%select(samples,proteins,annotation,fullproteinnames)
 write.csv(cazymes,file="2-allsamples-evalue30-cazymes.txt")
 
-#kofam<-read.csv("/bucket/BourguignonU/Jigs_backup/working_files/AIMS/paper1/markergenes/markers-rpkm/individualanalysis_feb2021/final-all-metagenomes-multiplekofamids-annotation.txt") #for the previous version
-kofam<-read.csv("/bucket/BourguignonU/Jigs_backup/working_files/AIMS/paper1/markergenes/markers-rpkm/individualanalysis_april2021/final-all-metagenomes-individualkofamids-annotation.txt") #the newest version
-colnames(kofam)<-c("X","samples","proteins","annotation")
-kofam$fullproteinnames<-paste(kofam$samples,kofam$proteins,sep="_")
-kofam<-kofam%>%select(samples,proteins,annotation,fullproteinnames)
-write.csv(kofam,file="2-final-all-metagenomes-multiplekofamids-annotation.txt")
+#kofam<-read.csv("/bucket/BourguignonU/Jigs_backup/working_files/AIMS/paper1/markergenes/markers-rpkm/individualanalysis_feb2021/final-all-metagenomes-multiplekofamids-annotation.txt") #for the previous version with only threshold filtering
+kofam<-read.csv("/bucket/BourguignonU/Jigs_backup/working_files/AIMS/paper1/markergenes/markers-rpkm/individualanalysis_april2021/final-all-metagenomes-individualkofamids-annotation.txt") #the newest version with threshold filtering and if condition to keep the genes of interest else keggids with lowest e-value.
+
 
 pfam<-read.csv("/bucket/BourguignonU/Jigs_backup/working_files/AIMS/paper1/markergenes/markers-rpkm/individualanalysis_feb2021/3columns-allsamples-multiplepfamids-evalue30-pfamoutput.txt")
 colnames(pfam)<-c("X","proteins","samples","annotation")
@@ -56,6 +53,7 @@ pfam$fullproteinnames<-paste(pfam$samples,pfam$proteins,sep="_")
 write.csv(pfam,file="2-3columns-allsamples-multiplepfamids-evalue30-pfamoutput.txt")
 
 allannotations<-rbind(cazymes,kofam,pfam)%>%as.data.frame()
+write.csv(allannotations,file="allannotations.csv")
 allannotations_tpm<-merge(allannotations,tpm,by.x=c("fullproteinnames"),by.y=c("fullproteinnames"))
 write.csv(allannotations_tpm,file="allannotations_tpm.csv")
 
