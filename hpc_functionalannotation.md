@@ -126,14 +126,14 @@ module load hmmer/3.1b2
 
 ```
 
-### a)To extract individual KEGG ID per proteinID- Based on presence of gene of interest and E.value. If the KEGGids we are examining are present then extract them in the output file. Otherwise take the KEGGid with the lowest evalue (B).
+### a)To extract individual KEGG ID per proteinID- Based on KO profile threshold and E.value<=1e-30 (A). If the KEGGids we are examining are present then extract them in the output file. Otherwise take the KEGGid with the lowest evalue (B).
 ```
-## save as "kofam_extract_threshold.R"
+## save as "kofam_extract_thresholdonly.R"
 #USAGE- Rscript [kofam] [output_file]
 args <- commandArgs(TRUE)
 kofam <- args[1]
-output_file <- args[2]
-
+output_file1 <- args[2]
+output_file2 <- args[3]
 
 library(dplyr)
 kofam<-read.csv(file=kofam,sep="\t",header=TRUE)
@@ -143,17 +143,18 @@ kolist<-kolist%>%select(knum,threshold)
 colnames(kolist)<-c("knum","kthreshold")
 
 #join the two files-
-#kofam_klist<-merge(kofam,kolist,by.x=c("KO"),by.y=c("knum"),all.x=TRUE)
-#kofam_klist$X.<-NULL
-#kofam_klist<-unique(kofam_klist)
+kofam_klist<-merge(kofam,kolist,by.x=c("KO"),by.y=c("knum"),all.x=TRUE)
+kofam_klist$X.<-NULL
+kofam_klist<-unique(kofam_klist)
 
-#(A) filter the KOs by their thresholds-
-#kofam_klist<-kofam_klist%>%mutate(keepkos=ifelse(as.numeric(thrshld)>=as.numeric(kthreshold),"aboveandequal","less"))
-#kofam_klist_selected<-kofam_klist%>%filter(keepkos=="aboveandequal")
+#filter the KOs by their thresholds-
+kofam_klist<-kofam_klist%>%mutate(keepkos=ifelse(as.numeric(thrshld)>=as.numeric(kthreshold),"aboveandequal","less"))
+kofam_klist_selected<-kofam_klist%>%filter(keepkos=="aboveandequal")
 
-kofam_klist_selected<-kofam
 kofam_klist_selected$E.value<-as.numeric(as.character(kofam_klist_selected$E.value))
 
+write.csv(kofam_klist_selected,file=output_file1) #...(A)
+#-------------------------------------------------------------------------------------------
 #get all koids per geneid in a single columns-
 library(data.table)
 setDT(kofam_klist_selected)
@@ -188,7 +189,7 @@ colnames(kofamall_evalue2)[which(names(kofamall_evalue2) == "finalkofam")] <- "a
 colnames(kofamall_evalue2)[which(names(kofamall_evalue2) == "gene.name")] <- "fullproteinnames"
 
 kofamall_evalue2<-kofamall_evalue2%>%select(samples,proteins,annotation,fullproteinnames)
-write.csv(kofamall_evalue2,file=output_file)
+write.csv(kofamall_evalue2,file=output_file2)
 #----------------------------------------------------------------------------------------------
 #to run the Rscript-
 files=(filename-*-kofamdetail)
@@ -197,7 +198,7 @@ file1=${files[${SLURM_ARRAY_TASK_ID}]} #it reads each index at a time
 module load R/3.6.1
 
 OUT_DIR="/flash/BourguignonU/Jigs/tpm_2021/kofam"
-Rscript ${OUT_DIR}/kofam_extract_threshold.R ${IN_DIR}/${file1} ${OUT_DIR}/selected-${file1}
+Rscript ${OUT_DIR}/kofam_extract_thresholdonly.R ${IN_DIR}/${file1} ${OUT_DIR}/selected-${file1}
 
 #join all the files together-
 cat selected* > final-all-metagenomes-multiplekofamids-annotation.txt
