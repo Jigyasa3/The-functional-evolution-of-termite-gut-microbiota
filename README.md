@@ -16,4 +16,4 @@ The codes are maintained by Jigyasa Arora. For any questions, please open an iss
 
 # workflow
 
-<img src="https://github.com/Jigyasa3/termite_146guts_microbes_function/blob/main/schematics2.jpg" width="200" height="300">
+<img src="https://github.com/Jigyasa3/termite_146guts_microbes_function/blob/main/schematics2.jpg" width="400" height="1000">
