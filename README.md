@@ -1,5 +1,6 @@
 # The functional evolution of termite gut microbiota
 This repository contains the scripts to run the analysis performed for the manuscript **The functional evolution of termite gut microbiota** 
+
 *Arora, Jigyasa and Kinjo, Yukihiro and Šobotník, Jan and Buček, Aleš and Clitheroe, Crystal and Stiblik, Petr and Roisin, Yves and Žifčáková, Lucia and Park, Yung Chul and Kim, Ki Yoon and Sillam-Dussès, David and Hervé, Vincent and Lo, Nathan and Tokuda, Gaku and Brune, Andreas and Bourguignon, Thomas, The Functional Evolution of Termite Gut Microbiota. Available at SSRN: https://ssrn.com/abstract=3908779 or http://dx.doi.org/10.2139/ssrn.3908779*
 
 The data analysis occurs in the following steps-
