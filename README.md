@@ -15,4 +15,5 @@ The data analysis occurs in the following steps-
 The codes are maintained by Jigyasa Arora. For any questions, please open an issue or email at [jigyasa-arora@oist.jp](jigyasa-arora@oist.jp)
 
 # workflow
-![](https://github.com/Jigyasa3/termite_146guts_microbes_function/blob/main/schematics2.jpg | width=100)
+
+<img src="https://github.com/Jigyasa3/termite_146guts_microbes_function/blob/main/schematics2.jpg" width="200" height="300">
