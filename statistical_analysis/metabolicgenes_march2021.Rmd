@@ -1,0 +1,1493 @@
+---
+title: "metabolic_genes"
+author: "Jigyasa_Arora"
+date: "2/28/2021"
+---
+
+```{r}
+
+library(dplyr)
+library(tidyr)
+library(ape)
+library(data.table)
+```
+
+##Extracting out metabolic genes from contigs+summing by subunit+using Hydrogenases classified by Hyddb-
+```{r}  
+ 
+functions<-read.csv("april2_functions_data/all-metagenome-annotation-taxonomy-1000bps.txt") #april version
+functions$domain<-gsub("_p__.*$","",functions$taxa)
+
+#get bacterial contigs out-
+functions_bacteria<-functions%>%filter(domain=="d__Bacteria")
+
+#sum by annotation + tpm-
+setDT(functions_bacteria)
+functions_bacteria_genes<-functions_bacteria[, .(TPM = sum(TPM)), by = .(samples,annotation)]
+
+#spread the data-
+library(tidyr)
+functions_bacteria_genes_spread<-as.data.frame(spread(functions_bacteria_genes,annotation,TPM))
+rownames(functions_bacteria_genes_spread)<-functions_bacteria_genes_spread$samples
+
+
+#get 129 samples out-
+#termite time tree
+newtree_129samples<-read.tree("1000bps_taxonomy_129taxa_tree.nwk")
+dnew2<-data.frame(label=newtree_129samples$tip.label)
+
+dnew2$label<-as.character(dnew2$label)
+dnew2$runnumber<-unlist(lapply(strsplit(dnew2$label,split="-"),"[",1))
+dnew2$runnumber<-gsub("_","-",dnew2$runnumber)
+
+functions_bacteria_genes_spread2<-merge(functions_bacteria_genes_spread,dnew2,by.x="samples",by.y="runnumber",all.y=TRUE)
+rownames(functions_bacteria_genes_spread2)<-functions_bacteria_genes_spread2$label
+
+#order the rownames by termite tree to get samples with no data at this step!
+functions_bacteria_genes_spread2<-functions_bacteria_genes_spread2[match(newtree_129samples$tip.label,rownames(functions_bacteria_genes_spread2)), ]
+
+write.csv(functions_bacteria_genes_spread2,file="april2_functions_data/bacterial_functionalgenes_all_april2021.csv")
+#--------------------------------------------------------------------------------------
+##summing by subunits-
+main_funcs<-read.csv("functions/allbacterial_koids_metabolicgenes_jan2021.csv",header=FALSE)
+
+#1.
+acscols<-c("K00198","K00194","K00197") #K14138,K15023 not found.
+functions_bacteria_genes_spread2$acs<-functions_bacteria_genes_spread2%>%select("K00198","K00194","K00197")%>%rowSums(na.rm=TRUE)
+functions_bacteria_genes_spread2<-functions_bacteria_genes_spread2%>%select(-c("K00198","K00194","K00197"))
+
+#2.
+apr<-c("K00394","K00395")
+functions_bacteria_genes_spread2$apr<-functions_bacteria_genes_spread2%>%select("K00394","K00395")%>%rowSums(na.rm=TRUE)
+functions_bacteria_genes_spread2<-functions_bacteria_genes_spread2%>%select(-c("K00394","K00395"))
+
+#3.
+#dsr<-c("K11180","K11181")
+#functions_bacteria_genes_spread2$dsr<-functions_bacteria_genes_spread2%>%select("K11180","K11181")%>%rowSums(na.rm=TRUE)
+#functions_bacteria_genes_spread2<-functions_bacteria_genes_spread2%>%select(-c("K11180","K11181"))
+
+#4.
+#nif<-c("K02591","K02588","K02586")
+#functions_bacteria_genes_spread2$nif<-functions_bacteria_genes_spread2%>%select("K02586","K02591","K02588")%>%rowSums(na.rm=TRUE)
+#functions_bacteria_genes_spread2<-functions_bacteria_genes_spread2%>%select(-c("K02586","K02591","K02588"))
+
+#5.
+nar<-c("K00370","K00371","K00374")
+functions_bacteria_genes_spread2$nar<-functions_bacteria_genes_spread2%>%select("K00370","K00371","K00374")%>%rowSums(na.rm=TRUE)
+functions_bacteria_genes_spread2<-functions_bacteria_genes_spread2%>%select(-c("K00370","K00371","K00374"))
+
+#6.
+#nap<-c("K02567","K02568")
+#functions_bacteria_genes_spread2$nap<-functions_bacteria_genes_spread2%>%select("K02567","K02568")%>%rowSums(na.rm=TRUE)
+#functions_bacteria_genes_spread2<-functions_bacteria_genes_spread2%>%select(-c("K02567","K02568"))
+
+#7.
+nir<-c("K00362","K00363")
+functions_bacteria_genes_spread2$nir<-functions_bacteria_genes_spread2%>%select("K00362","K00363")%>%rowSums(na.rm=TRUE)
+functions_bacteria_genes_spread2<-functions_bacteria_genes_spread2%>%select(-c("K00362","K00363"))
+
+#8.
+nrf<-c("K03385") #"K15876" absent
+functions_bacteria_genes_spread2$nrf<-functions_bacteria_genes_spread2%>%select("K03385")%>%rowSums(na.rm=TRUE)
+functions_bacteria_genes_spread2<-functions_bacteria_genes_spread2%>%select(-c("K03385"))
+
+#9.
+#ure<-c("K01428","K01429","K01430")
+#functions_bacteria_genes_spread2$ure<-functions_bacteria_genes_spread2%>%select("K01428","K01429","K01430")%>%rowSums(na.rm=TRUE)
+#functions_bacteria_genes_spread2<-functions_bacteria_genes_spread2%>%select(-c("K01428","K01429","K01430"))
+
+#10.
+glt<-c("K00265","K00266")
+functions_bacteria_genes_spread2$glt<-functions_bacteria_genes_spread2%>%select("K00265","K00266")%>%rowSums(na.rm=TRUE)
+functions_bacteria_genes_spread2<-functions_bacteria_genes_spread2%>%select(-c("K00265","K00266"))
+
+#11.
+arg<-c("K00611") #"K01940","K01755" absent
+functions_bacteria_genes_spread2$arg<-functions_bacteria_genes_spread2%>%select("K00611")%>%rowSums(na.rm=TRUE)
+functions_bacteria_genes_spread2<-functions_bacteria_genes_spread2%>%select(-c("K00611"))
+
+#12.
+#urt<-c("K11959","K11960","K11961","K11962","K11963")
+#functions_bacteria_genes_spread2$urt<-functions_bacteria_genes_spread2%>%select("K11959","K11960","K11961","K11962","K11963")%>%rowSums(na.rm=TRUE)
+#functions_bacteria_genes_spread2<-functions_bacteria_genes_spread2%>%select(-c("K11959","K11960","K11961","K11962","K11963"))
+
+#13.
+nife_group1<-c("[NiFe] Group 1a","[NiFe] Group 1b","[NiFe] Group 1c","[NiFe] Group 1d","[NiFe] Group 1f","[NiFe] Group 1i")
+functions_bacteria_genes_spread2$Group1<-functions_bacteria_genes_spread2%>%select("[NiFe] Group 1a","[NiFe] Group 1b","[NiFe] Group 1c","[NiFe] Group 1d","[NiFe] Group 1f","[NiFe] Group 1i")%>%rowSums(na.rm=TRUE)
+functions_bacteria_genes_spread2<-functions_bacteria_genes_spread2%>%select(-c("[NiFe] Group 1a","[NiFe] Group 1b","[NiFe] Group 1c","[NiFe] Group 1d","[NiFe] Group 1f","[NiFe] Group 1i"))
+
+
+#14.
+colnames(functions_bacteria_genes_spread2)[which(names(functions_bacteria_genes_spread2) == "[NiFe] Group 2b")] <- "Group2"
+
+#15.
+nife_group3<-c("[NiFe] Group 3a","[NiFe] Group 3b","[NiFe] Group 3d")
+functions_bacteria_genes_spread2$Group3<-functions_bacteria_genes_spread2%>%select("[NiFe] Group 3a","[NiFe] Group 3b","[NiFe] Group 3d")%>%rowSums(na.rm=TRUE)
+functions_bacteria_genes_spread2<-functions_bacteria_genes_spread2%>%select(-c("[NiFe] Group 3a","[NiFe] Group 3b","[NiFe] Group 3d"))
+
+#16.
+nife_group4<-c("[NiFe] Group 4a","[NiFe] Group 4c","[NiFe] Group 4e","[NiFe] Group 4g")
+functions_bacteria_genes_spread2$Group4<-functions_bacteria_genes_spread2%>%select("[NiFe] Group 4a","[NiFe] Group 4c","[NiFe] Group 4e","[NiFe] Group 4g")%>%rowSums(na.rm=TRUE)
+functions_bacteria_genes_spread2<-functions_bacteria_genes_spread2%>%select(-c("[NiFe] Group 4a","[NiFe] Group 4c","[NiFe] Group 4e","[NiFe] Group 4g"))
+
+
+#17.
+fefe_groupC<-c("Group C1","Group C2","Group C3")
+functions_bacteria_genes_spread2$GroupC<-functions_bacteria_genes_spread2%>%select("Group C1","Group C2","Group C3")%>%rowSums(na.rm=TRUE)
+functions_bacteria_genes_spread2<-functions_bacteria_genes_spread2%>%select(-c("Group C1","Group C2","Group C3"))
+
+#18.
+colnames(functions_bacteria_genes_spread2)[which(names(functions_bacteria_genes_spread2) == "Group A")] <- "GroupA"
+colnames(functions_bacteria_genes_spread2)[which(names(functions_bacteria_genes_spread2) == "Group B")] <- "GroupB"
+
+write.csv(functions_bacteria_genes_spread2,file="april2_functions_data/allfunctions_rawTPM_129samples_genesnosubunit.csv")
+
+```
+
+
+##Filters and clr transformation of data-
+```{r} 
+##Transformations-
+
+##clr transform-
+functions_bacteria_genes_spread2<-read.csv("april2_kofam30evalue_functions_data/allfunctions_rawTPM_129samples_genesnosubunit.csv")
+rownames(functions_bacteria_genes_spread2)<-functions_bacteria_genes_spread2$X
+
+
+clr_transform<-function(filename_spread2){ 
+library(propr) 
+filename_spread2[is.na(filename_spread2)] <-0 #convert NA to zero
+#rownames(filename_spread2)<-filename_spread2$label
+filename_spread2$label<-NULL
+filename_spread2$sample_names<-NULL
+filename_spread2$samples<-NULL
+filename_spread2$X<-NULL
+#add psuedo counts to account for missing and not-present data-
+filename_spread2<-filename_spread2+0.65
+
+filename_propr<-propr(filename_spread2,metric="rho",ivar="clr")
+
+#creating a df with all the transformed pathways and metadata-
+filename_propr_df<-filename_propr@logratio
+
+return(filename_propr_df)
+}
+
+functions_clr<-clr_transform(functions_bacteria_genes_spread2)
+
+#finding non-numeric columns in a large data-frame-
+functions_bacteria_genes_spread3[is.na(functions_bacteria_genes_spread3)] <-0
+functions_bacteria_genes_spread3$samples<-NULL
+functions_bacteria_genes_spread3$label<-NULL
+original_cols<-colnames(functions_bacteria_genes_spread3)%>%as.data.frame()
+colnames(original_cols)<-c("columns")
+
+test<-functions_bacteria_genes_spread3%>% select_if(is.numeric)
+numeric_columns<-colnames(test)%>%as.data.frame()
+colnames(numeric_columns)<-c("columns")
+
+removedcols<-anti_join(original_cols,numeric_columns,by="columns")
+
+#-------------------------------------------------------------------------------------
+#select the keggs from metabolic pathways out-
+main_funcs<-read.csv("functions/all_koids_metabolicgenes_nosubunits_jan2021.csv",header=FALSE) #genes with subunits have correct names in this file
+
+mainfuncs_functions_clr<-functions_clr%>%dplyr::select_if(names(.) %in% main_funcs$V1) #select the keggs out
+write.csv(mainfuncs_functions_clr,file="april2_functions_data/metabolic_pathways_clr_april2021.csv")
+
+mainfuncs_functions_tpm<-functions_bacteria_genes_spread2%>%dplyr::select_if(names(.) %in% main_funcs$V1)
+write.csv(mainfuncs_functions_tpm,file="april2_functions_data/metabolic_pathways_rawtpm_april2021.csv")
+
+#---------------------------------------------------------------------------------------
+mainfuncs_functions_clr<-read.csv("april2_functions_data/metabolic_pathways_clr_april2021.csv",row.names=1)
+mainfuncs_functions_tpm<-read.csv("april2_functions_data/metabolic_pathways_rawtpm_april2021.csv",row.names=1)
+
+##select annotations present in more than 10% of the samples-(12.9/129)
+above10perc_function<-function(filename){
+  filename$label<-NULL
+  filename$samplename<-NULL
+  filename[is.na(filename)] <-0
+  filename2<-filename #for filtering
+  filename2[filename2 > 0] <- 1
+  filename2[filename2 <= 0] <-0
+  filename_10perc<-filename2[colSums(filename2) >=12.9]
+  columns<-colnames(filename_10perc)
+
+  filename3<-filename%>%dplyr::select(columns)
+  return(filename3)
+}
+
+functions_above10<-above10perc_function(mainfuncs_functions_tpm)
+#genes present in 10% of samples. 0-1 conversion done on raw TPM as low TPMs (above 0) can have zero clr values, but they are still present.
+genescols<-colnames(functions_above10)
+functions_clr_10perc<-mainfuncs_functions_clr%>%select(genescols) #select the columns same as 10perc TPM.
+
+write.csv(functions_clr_10perc,file="april2_functions_data/metabolic_pathways_clr_129samples_genesnosubunit.csv")
+
+morethan3taxa_functions<-function(filename){
+
+filename$label<-NULL
+filename$samplename<-NULL
+filename2<-filename
+filename2[filename2 > 0] <- 1
+filename2[filename2 <= 0] <-0
+filename_threeabove<-filename2[rowSums(filename2[,])>=3, ]
+rows<-rownames(filename_threeabove)
+
+filename3<-subset(filename, rownames(filename) %in% rows)
+
+return(filename3)
+}
+
+
+#functions_10perc_3above<-morethan3taxa_functions(functions_above10)
+#genescols<-colnames(functions_10perc_3above)
+#genesrows<-rownames(functions_10perc_3above)
+#metabolic_clr_10perc_3above<-functions_clr_10perc%>%select(genescols) #select same columns as 10perc_3above TPM
+#metabolic_clr_10perc_3above<-metabolic_clr_10perc_3above[rownames(functions_clr_10perc) %in% genesrows, ] #select same rows as 10perc_3above TPM
+
+write.csv(metabolic_clr_10perc_3above,file="april2_functions_data/metabolic_pathways_clr_127samples_genesnosubunit.csv")
+
+#----------------------------------------------------------------------------------------
+#order the columns by metabolic pathways-
+main_funcs$V1[!(main_funcs$V1) %in% colnames(metabolic_clr_10perc_3above)] #find keggs not present
+
+
+main_funcs2<-main_funcs%>%filter(!V1 %in% c("K01938","K01491","K13990","dsr","nif","nap","ure","K01915","Group1","Group2","GroupA","GroupB","GroupC","mcr","urt")) #keep genes in metagenome contigs 
+genenames<-as.vector(main_funcs2$V1)
+metabolic_clr_10perc_3above_ordered<-metabolic_clr_10perc_3above[,genenames] #order the metagenome contigs data. #127 samples
+metabolic_clr_10perc_ordered<-functions_clr_10perc[,genenames] #order the metagenome contigs data. #129 samples
+
+#order by termite tree-
+tree<-read.tree("1000bps_taxonomy_129taxa_tree.nwk")
+tree2<-keep.tip(tree,as.vector(rownames(metabolic_clr_10perc_3above_ordered)))
+
+metabolic_clr_10perc_3above_ordered<-metabolic_clr_10perc_3above_ordered[match(tree2$tip.label,rownames(metabolic_clr_10perc_3above_ordered)), ]
+
+metabolic_clr_10perc_ordered<-metabolic_clr_10perc_ordered[match(tree$tip.label,rownames(metabolic_clr_10perc_ordered)), ]
+
+
+write.csv(metabolic_clr_10perc_3above_ordered,file="april2_functions_data/metabolic_pathways_clr_127samples_genesnosubunit.csv")
+write.tree(tree2,file="1000bps_taxonomy_127taxa.nwk")
+
+write.csv(metabolic_clr_10perc_ordered,file="april2_functions_data/metabolic_pathways_clr_129samples_genesnosubunit.csv")
+
+
+
+
+
+```
+
+##Moran's I and Phyl.anova stats-
+```{r}
+#Moran's I-
+functions<-read.csv("april2_kofam30evalue_functions_data/metabolic_pathways_clr_129samples_genesnosubunit.csv",row.names = 1) #clr transformed + summed by subunit
+tree<-read.tree("1000bps_taxonomy_129taxa_tree.nwk")
+
+#remove ftcD gene-
+functions<-functions%>%select(-c("K13990"))
+
+functions<-functions[match(tree$tip.label,rownames(functions)), ] #match the tree
+
+#run phylo.signal-<get signficiant p.values for phylogenetic correlation for each taxa>
+library(adephylo)
+library(ape)
+library(phylobase)
+library(phylosignal)
+
+#clr transformed data with 0 values-<all funcs>
+p4d <- phylo4d(tree,functions)
+p2<-phyloSignal(p4d = p4d, method = "I",reps=9999)
+
+#adjusted p-value using Benjamini & Hochberg method ("BH") or fdr method-
+mod2 = as.data.frame(p2$pvalue)
+mod2$padjusted_lambda<-p.adjust(mod2$I, method='fdr')
+mod2$functions<-rownames(mod2)
+mod2<-mod2%>%dplyr::mutate(significance_padjusted=ifelse(padjusted_lambda<0.05,"*",""))
+mod2<-mod2%>%mutate(significance_I=ifelse(I<0.05,"*",""))
+main_funcs<-read.csv("functions/all_koids_metabolicgenes_nosubunits_jan2021.csv",header=FALSE)
+main_funcs$V1<-gsub(" ",".",main_funcs$V1) #match the column with colnames of file.
+mod2<-merge(mod2,main_funcs,by.x="functions",by.y="V1")
+
+write.csv(mod2,file="C:/Users/jigyasa-arora.OIST/Documents/phylogenetic_autocorrelation_metabolicgenes_nosubunit_129samples_april2021_2.csv")
+#-------------------------------------------------------------------------------------------------------------
+##phyl.anova-
+library(geomorph)
+functions<-functions+100 #add a constant to every value
+
+sampleinfo<-read.csv("taxonomy/sample_names_ids_withotherfactors_tomedit.2.csv",row.names=1)
+rownames(sampleinfo)<-sampleinfo$termite_tree_labels
+sampleinfo<-sampleinfo[match(tree$tip.label,rownames(sampleinfo)), ] #match the tree
+
+phyl.anova.func2_list<-function(filename){
+filename<-as.data.frame(t(filename)) #convert row to column
+filename$label<-rownames(filename)
+geo_functions<-merge(filename,sampleinfo,by.x="label",by.y="termite_tree_labels")
+geo_functions<-geo_functions[match(tree$tip.label,geo_functions$label), ] #match the tree
+geo_functions$diet_type_number4<-as.factor(geo_functions$diet_type_number4)
+geo_functions[,2]<-as.numeric(geo_functions[,2])
+
+gdf <- geomorph.data.frame(abundance = geo_functions[,2], diet = as.factor(geo_functions$diet_type_number4), phy = tree) #create a dataframe that contains the data and phylogeny. [according to google forum]
+
+#group_name <- names(filename)[2] #get the correct column name. column 2 is the cazyme.
+
+geomorph.lm<-procD.lm(abundance ~ diet, iter=9999,RRPP=TRUE,effect.type = "F", SS.type = "II" ,data=gdf,print.progress = FALSE) #SS.type="II" is used if the groups (i.e. diet/lineage) are of uneven sizes.
+mod<-anova(geomorph.lm) #to examine if there is a phylogenetic correlation between "y" and "x"
+mod2<-as.data.frame(mod$table)
+mod2<-mod2[1,7]
+# d is distance between vector lengths is the difference in the amount of shape change per unit of size. If d is 0.05 i.e., | 0.20 - 0.15 |.  Why do this?  Two vectors can be correlated in direction - the way shape changes with size - but one group can exhibit more shape change per unit size than the other
+#D tells us the effect size of the standard deviation between two groups. Positive and above 0.2-0.3 means larger positive difference, while negative and below -0.2 to -0.3 means larger negative difference.
+
+pw<-pairwise(geomorph.lm,groups = as.factor(gdf$diet))
+pw_summary<-summary(pw,confidence=0.95,show.vectors = TRUE)
+pw_summary2<-as.data.frame(pw_summary$summary.table)
+
+pw_summary2$padjust<-p.adjust(pw_summary2$`Pr > d`,method="fdr") #fdr correction of p.value
+pw_summary2$diets<-rownames(pw_summary2)
+
+#convert the output to correct formats-
+names<-colnames(geo_functions[2])
+pw_summary2$genename<-rep(names,times=nrow(pw_summary2))
+library(tidyr)
+pw_summary3<-pw_summary2%>%dplyr::select("padjust","diets","genename")
+pw_spread<-pw_summary3%>%spread(diets,padjust)
+pw_spread2<-cbind(pw_spread,mod2)
+ 
+return(pw_spread2) 
+}
+
+functions_t<-as.data.frame(t(functions))
+xy.list <-  split(functions_t, seq(nrow(functions_t))) #convert df to a list
+
+kegg_geomorph<-lapply(xy.list,phyl.anova.func2_list) #apply on all columns
+
+kegg_geomorph_df<-do.call(rbind.data.frame,kegg_geomorph)
+
+
+#find p.adjust for anova-
+kegg_geomorph_df$padjust<-p.adjust(kegg_geomorph_df$mod2)
+
+kegg_geomorph_df<-kegg_geomorph_df%>%mutate(significant_anova=ifelse(padjust <=0.05,"*",""))
+
+#join with genenames-
+main_funcs<-read.csv("functions/all_koids_metabolicgenes_nosubunits_jan2021.csv",header=FALSE)
+main_funcs$V1<-gsub(" ",".",main_funcs$V1) #match the column with colnames of file.
+kegg_geomorph_df2<-merge(kegg_geomorph_df,main_funcs,by.x="genename",by.y="V1")
+
+write.csv(kegg_geomorph_df2,file="C:/Users/jigyasa-arora.OIST/Documents/Phylogenetic_anova_withdiet_metabolicpathwaygenes_nosubunit_129samples_april2021_2.csv")
+
+
+#--------------------------------------------------------------------------------
+#Supplementary Table S11-
+
+phylanova<-read.csv("C:/Users/jigyasa-arora.OIST/Documents/Phylogenetic_anova_withdiet_metabolicpathwaygenes_nosubunit_129samples_april2021_2.csv")
+phylanova<-phylanova%>%mutate(new1.02=ifelse(X1.2<0.05 & X1.2>0.01,"*",ifelse(X1.2<0.01 & X1.2>0.001,"**",ifelse(X1.2<0.001,"***","not-significant"))))
+phylanova<-phylanova%>%mutate(new1.03=ifelse(X1.3<0.05 & X1.3>0.01,"*",ifelse(X1.3<0.01 & X1.3>0.001,"**",ifelse(X1.3<0.001,"***","not-significant"))))
+phylanova<-phylanova%>%mutate(new1.05=ifelse(X1.5<0.05 & X1.5>0.01,"*",ifelse(X1.5<0.01 & X1.5>0.001,"**",ifelse(X1.5<0.001,"***","not-significant"))))
+phylanova<-phylanova%>%mutate(new2.03=ifelse(X2.3<0.05 & X2.3>0.01,"*",ifelse(X2.3<0.01 & X2.3>0.001,"**",ifelse(X2.3<0.001,"***","not-significant"))))
+phylanova<-phylanova%>%mutate(new2.05=ifelse(X2.5<0.05 & X2.5>0.01,"*",ifelse(X2.5<0.01 & X2.5>0.001,"**",ifelse(X2.5<0.001,"***","not-significant"))))
+phylanova<-phylanova%>%mutate(new3.05=ifelse(X3.5<0.05 & X3.5>0.01,"*",ifelse(X3.5<0.01 & X3.5>0.001,"**",ifelse(X3.5<0.001,"***","not-significant"))))
+
+write.csv(phylanova,file="C:/Users/jigyasa-arora.OIST/Documents/Phylogenetic_anova_withdiet_metabolicpathwaygenes_nosubunit_129samples_april2021_2.csv")
+
+#add mean TPM values per gene-family-
+functions_tpm<-read.csv("april2_kofam30evalue_functions_data/metabolic_pathways_rawtpm_april2021.csv")
+
+#extract columns and rows used in clr-transformed data-
+functions<-read.csv("april2_kofam30evalue_functions_data/metabolic_pathways_clr_129samples_genesnosubunit.csv")
+
+functions_tpm2<-functions_tpm%>%select(colnames(functions))
+functions_tpm3<-functions_tpm2%>%filter(X %in% functions$X)
+
+#join with sampleinfo-
+sampleinfo<-read.csv("taxonomy/sample_names_ids_withotherfactors_tomedit.2.csv")
+functions2<-merge(functions_tpm3,sampleinfo,by.x="X",by.y="termite_tree_labels")
+cols<-colnames(functions_tpm3)
+cols<-cols[-1]
+
+functions2[is.na(functions2)] <-0
+setDT(functions2)
+functions2_diet<-functions2[, lapply(.SD, mean, na.rm=TRUE), by=diet_type_number4, .SDcols=cols ]
+functions2_diet<-as.data.frame(functions2_diet)
+functions2_diet$diet_type_number4<-paste("diet",functions2_diet$diet_type_number4,sep="_")
+
+write.csv(functions2_diet,file="april2_kofam30evalue_functions_data/metabolicgenes_meanTPM_april2021.csv")
+#functions2_diet2<-t(functions2_diet)%>%as.data.frame()
+#functions2_diet2$names<-rownames(functions2_diet2)
+#phylanova_df<-merge(functions2_diet2,phylanova,by.x="names",by.y="genename")
+
+
+
+```
+
+##Basic stats on metabolic genes-
+```{r} 
+
+
+mainfuncs_tpm<-read.csv("metabolic_pathways_rawtpm_march2021.csv")
+rownames(mainfuncs_tpm)<-mainfuncs_tpm$X
+
+##relative abundance of each gene across diets-<raw TPM>
+
+sampleinfo<-read.csv("taxonomy/sample_names_ids_withotherfactors_tomedit.2.csv")
+sampleinfo<-sampleinfo%>%select(termite_tree_labels,diet_type_number4)
+
+mainfuncs_tpm_diet<-merge(mainfuncs_tpm,sampleinfo,by.x="X",by.y="termite_tree_labels")
+
+#get 126 samples out-as basic stats should match the phylo stats-
+tree<-read.tree("1000bps_taxonomy_126taxa_tree.nwk")
+dnew2<-data.frame(label=tree$tip.label)
+
+dnew2$label<-as.character(dnew2$label)
+dnew2$runnumber<-unlist(lapply(strsplit(dnew2$label,split="-"),"[",1))
+dnew2$runnumber<-gsub("_","-",dnew2$runnumber)
+
+mainfuncs_tpm_diet<-merge(mainfuncs_tpm_diet,dnew2,by.x="X",by.y="label",all.y=TRUE)
+rownames(mainfuncs_tpm_diet)<-mainfuncs_tpm_diet$X
+
+
+#sum by diet-
+cols<-colnames(mainfuncs_tpm_diet)
+cols<-cols[!cols %in% c("X","diet_type_number4","runnumber")]
+
+setDT(mainfuncs_tpm_diet)
+mainfuncs_tpm_diet2<-mainfuncs_tpm_diet[, lapply(.SD, sum, na.rm=TRUE), by=diet_type_number4, .SDcols=cols ] #for all the metabolic functions
+mainfuncs_tpm_diet2$diet_type_number4<-gsub("^","diet_",mainfuncs_tpm_diet2$diet_type_number4)
+mainfuncs_tpm_diet2<-as.data.frame(mainfuncs_tpm_diet2)
+rownames(mainfuncs_tpm_diet2)<-mainfuncs_tpm_diet2$diet_type_number4
+
+
+#checking the relative abundance of reductive acetogenesis genes per diet-
+mainfuncs_tpm_diet2%>%select("K01938","K01491","K00297","acs","K00625","K00925")
+
+
+write.csv(mainfuncs_tpm_diet2,file="functions-metabolicgenes-bydiet-march2021.csv")
+
+#presence of metabolic genes per termite lineage-
+mainfuncs_tpm<-read.csv("metabolic_pathways_rawtpm_march2021.csv",row.names=1)
+
+sampleinfo<-read.csv("taxonomy/sample_names_ids_withotherfactors_tomedit.2.csv")
+sampleinfo<-sampleinfo%>%select(termite_tree_labels,diet_type_number4,lineage,lineage2)
+
+reductive<-mainfuncs_tpm%>%select("K01938","K01491","K00297","K00122","acs","K00625","K00925")%>%filter_all(any_vars(. != 0)) #128 samples
+sulfate<-mainfuncs_tpm%>%select("apr","K00958")%>%filter_all(any_vars(. != 0)) #65 samples
+sulfate$X<-rownames(sulfate)
+sulfate<-merge(sulfate,sampleinfo,by.x="X",by.y="termite_tree_labels")
+
+
+#---------------------------------------------------------------------------------
+#what is the relative abundance of hydrogenases in the metagenomes?
+hydrogenases<-read.csv("metabolic_pathways_rawtpm_march2021.csv")
+hydrogenases[is.na(hydrogenases)] <-0
+
+#get 126 samples out-as basic stats should match the phylo stats-
+library(ape)
+tree<-read.tree("1000bps_taxonomy_126taxa_tree.nwk")
+dnew2<-data.frame(label=tree$tip.label)
+
+dnew2$label<-as.character(dnew2$label)
+dnew2$runnumber<-unlist(lapply(strsplit(dnew2$label,split="-"),"[",1))
+dnew2$runnumber<-gsub("_","-",dnew2$runnumber)
+
+hydrogenases<-merge(hydrogenases,dnew2,by.x="X",by.y="label",all.y=TRUE)
+rownames(hydrogenases)<-hydrogenases$X
+
+
+fefe_overallsum<-sum(hydrogenases$GroupA)+sum(hydrogenases$GroupB)+sum(hydrogenases$GroupC)
+nife_overallsum<-sum(hydrogenases$Group1)+sum(hydrogenases$Group2)
+hydrogenases_overallsum<-fefe_overallsum+nife_overallsum
+
+print(paste0("Overall abundance of FeFe hydrogenases is ", fefe_overallsum/(nife_overallsum) , " fold more than NiFe hydrogenases"))
+
+
+print(paste0("Overall abundance of GroupA FeFe hydrogenases is ", sum(hydrogenases$GroupA)/fefe_overallsum*100))
+print(paste0("Overall abundance of GroupB FeFe hydrogenases is ", sum(hydrogenases$GroupB)/fefe_overallsum*100))
+print(paste0("Overall abundance of GroupC FeFe hydrogenases is ", sum(hydrogenases$GroupC)/fefe_overallsum*100))
+
+print(paste0("Overall abundance of Group1 NiFe hydrogenases is ", sum(hydrogenases$Group1)/nife_overallsum*100))
+print(paste0("Overall abundance of Group2 NiFe hydrogenases is ", sum(hydrogenases$Group2)/nife_overallsum*100))
+
+
+#across diets-
+#checking the relative abundance of genes per diet-<mainfuncs_tpm_diet2 is based on 126 samples>
+mainfuncs_tpm_diet2%>%select(GroupA,GroupC)
+mainfuncs_tpm_diet2%>%select(Group1)
+
+#distribution of hydrogenases across termite lineages-
+##select hydrogenases, remove termite samples with zero values
+hydrogenases2<-hydrogenases%>%select(GroupA,GroupB,GroupC,Group1,Group2)%>%filter_all(any_vars(. != 0)) 
+hydrogenases2$X<-rownames(hydrogenases2)
+
+sampleinfo<-read.csv("taxonomy/sample_names_ids_withotherfactors_tomedit.2.csv")
+sampleinfo<-sampleinfo%>%select(termite_tree_labels,diet_type_number4,lineage,lineage2)
+
+hydrogenases2<-merge(hydrogenases2,sampleinfo,by.x="X",by.y="termite_tree_labels")
+hydrogenases2%>%select(lineage)%>%group_by(lineage)%>%count()
+#--------------------------------------------------------------------------------------
+#NiFe sub-classification-
+functions_bacteria_genes_spread<-read.csv("bacterial_functionalgenes_all_march2021.csv")
+#functions_bacteria_genes_spread<-as.data.frame(spread(functions_bacteria_genes,annotation,TPM))
+#rownames(functions_bacteria_genes_spread)<-functions_bacteria_genes_spread$sample_names
+functions_bacteria_genes_spread[is.na(functions_bacteria_genes_spread)] <-0
+
+#get 126 samples out-
+tree<-read.tree("1000bps_taxonomy_126taxa_tree.nwk")
+dnew2<-data.frame(label=tree$tip.label)
+
+dnew2$label<-as.character(dnew2$label)
+dnew2$runnumber<-unlist(lapply(strsplit(dnew2$label,split="-"),"[",1))
+dnew2$runnumber<-gsub("_","-",dnew2$runnumber)
+
+functions_bacteria_genes_spread2<-merge(functions_bacteria_genes_spread,dnew2,by.x="sample_names",by.y="runnumber",all.y=TRUE)
+rownames(functions_bacteria_genes_spread2)<-functions_bacteria_genes_spread2$label
+
+functions_bacteria_genes_spread2[is.na(functions_bacteria_genes_spread2)] <-0
+rownames(functions_bacteria_genes_spread2)<-functions_bacteria_genes_spread2$X
+
+#get the NiFe groups out-
+columns<-colnames(functions_bacteria_genes_spread2)%>%as.data.frame()
+colnames(columns)<-c("cols")
+nifecols<-columns%>%filter(str_detect(cols, "NiFe"))%>%as.vector()
+
+#extract NiFe sub-classifications out-
+nife_group1d<-functions_bacteria_genes_spread2%>%select("X.NiFe..Group.1d")
+nife_allgroups<-functions_bacteria_genes_spread2%>%select(nifecols$cols)
+
+allnife<-sum(nife_allgroups$X.NiFe..Group.1a)+sum(nife_allgroups$X.NiFe..Group.1b)+sum(nife_allgroups$X.NiFe..Group.1c)+sum(nife_allgroups$X.NiFe..Group.1d)+sum(nife_allgroups$X.NiFe..Group.1f)+sum(nife_allgroups$X.NiFe..Group.1i)+sum(nife_allgroups$X.NiFe..Group.2b)+sum(nife_allgroups$X.NiFe..Group.3a)+sum(nife_allgroups$X.NiFe..Group.3b)+sum(nife_allgroups$X.NiFe..Group.3d)+sum(nife_allgroups$X.NiFe..Group.4a)+sum(nife_allgroups$X.NiFe..Group.4c)+sum(nife_allgroups$X.NiFe..Group.4e)+sum(nife_allgroups$X.NiFe..Group.4g)
+
+allnifegroup1<-sum(nife_allgroups$X.NiFe..Group.1a)+sum(nife_allgroups$X.NiFe..Group.1b)+sum(nife_allgroups$X.NiFe..Group.1c)+sum(nife_allgroups$X.NiFe..Group.1d)+sum(nife_allgroups$X.NiFe..Group.1f)+sum(nife_allgroups$X.NiFe..Group.1i)
+
+print(paste0("Percent distribution of NiFe Group 1d in 126 metagenomes are ", sum(nife_group1d$X.NiFe..Group.1d)/allnife*100, "%"))
+print(paste0("Percent distribution of NiFe Group 1d in 126 metagenomes are ", sum(nife_group1d$X.NiFe..Group.1d)/allnifegroup1*100, "%"))
+
+#----------------------------------------------------------------------
+##how many samples are sulfate reducing genes present?
+
+mainfuncs_tpm<-read.csv("april2_kofam30evalue_functions_data/metabolic_pathways_rawtpm_april2021.csv")
+rownames(mainfuncs_tpm)<-mainfuncs_tpm$X
+
+mainfuncs_functions_sulfate<-mainfuncs_tpm%>%select(apr,K00958,dsr)
+
+#convert everything to binary-
+mainfuncs_functions_sulfate_binary<-mainfuncs_functions_sulfate
+mainfuncs_functions_sulfate_binary[is.na(mainfuncs_functions_sulfate_binary)] <-0 #convert NA to zero
+mainfuncs_functions_sulfate_binary[mainfuncs_functions_sulfate_binary > 0] <- 1 
+mainfuncs_functions_sulfate_binary[mainfuncs_functions_sulfate_binary <= 0] <-0
+
+mainfuncs_functions_sulfate_binary_rows<-mainfuncs_functions_sulfate_binary %>% mutate(sumVar = rowSums(.[1:2])) #get the sum of two genes
+rownames(mainfuncs_functions_sulfate_binary_rows)<-rownames(mainfuncs_functions_sulfate)
+mainfuncs_functions_sulfate_binary_rows<-mainfuncs_functions_sulfate_binary_rows%>%select(sumVar)
+mainfuncs_functions_sulfate_binary_rows[mainfuncs_functions_sulfate_binary_rows > 0] <- 1  #presence/absence of apr and sat genes in all termite samples.
+
+print(paste0("sulfate reducing genes aprAB and sat are found in ",sum(mainfuncs_functions_sulfate_binary_rows$sumVar)/nrow(mainfuncs_functions_sulfate_binary_rows)*100, "% of termite samples"))
+
+#across diets-
+#checking the relative abundance of genes per diet-<mainfuncs_tpm_diet2 is based on 126 samples>
+mainfuncs_tpm_diet2%>%select(apr)
+
+#across termite lineages-
+mainfuncs_functions_sulfate_binary_rows$X<-rownames(mainfuncs_functions_sulfate_binary_rows)
+samplenames<-read.csv("taxonomy/sample_names_ids_withotherfactors_tomedit.2.csv")
+mainfuncs_functions_sulfate_binary_rows2<-merge(mainfuncs_functions_sulfate_binary_rows,samplenames,by.x="X",by.y="termite_tree_labels")
+
+mainfuncs_functions_sulfate_binary_rows2%>%select(lineage2,sumVar)%>%group_by(lineage2,sumVar)%>%filter(sumVar!=0)%>%count()
+#----------------------------------------------------------------------------------------
+##differences across diet for nirogen metabolism-
+#across diets-
+#checking the relative abundance of genes per diet-<mainfuncs_tpm_diet2 is based on 126 samples>
+mainfuncs_tpm_diet2%>%select(ure)
+mainfuncs_tpm_diet2%>%select(arg)
+#----------------------------------------------------------------------------------------
+##how many samples are nifHDK genes present?
+
+mainfuncs_tpm<-read.csv("metabolic_pathways_rawtpm_march2021.csv",row.names = 1)
+
+
+mainfuncs_tpm_nif<-mainfuncs_tpm%>%select(nif)
+mainfuncs_tpm_nif$X<-rownames(mainfuncs_tpm_nif)
+
+#what is the difference of nif genes across diet?
+sampleinfo<-read.csv("taxonomy/sample_names_ids_withotherfactors_tomedit.2.csv")
+sampleinfo<-sampleinfo%>%select(termite_tree_labels,diet_type_number4)
+
+mainfuncs_tpm_nif_diet<-merge(mainfuncs_tpm_nif,sampleinfo,by.x="X",by.y="termite_tree_labels")
+setDT(mainfuncs_tpm_nif_diet)
+mainfuncs_tpm_nif_diet2<-mainfuncs_tpm_nif_diet[, .(nif = sum(nif)), by = .(diet_type_number4)]
+
+lt_wf<-mainfuncs_tpm_nif_diet2[1,2]+mainfuncs_tpm_nif_diet2[2,2]
+lt<-mainfuncs_tpm_nif_diet2[1,2]
+wf<-mainfuncs_tpm_nif_diet2[2,2]
+sf<-mainfuncs_tpm_nif_diet2[3,2]
+fc<-mainfuncs_tpm_nif_diet2[4,2]
+
+print(paste0("LT+WF are ", (lt_wf)/sf ," fold abundant than SF"))
+print(paste0("LT+WF are ", (lt_wf)/fc ," fold abundant than FC"))
+print(paste0("LT is ", (lt)/sf ," fold abundant than SF"))
+print(paste0("LT is ", (lt)/fc ," fold abundant than FC"))
+print(paste0("WF is ", (wf)/sf ," fold abundant than SF"))
+print(paste0("WF is ", (wf)/fc ," fold abundant than FC"))
+
+#-------------------------------------------------------------------------------
+
+
+```
+
+
+
+
+##methanogenesis in metagenomes genes- 
+```{r} 
+functions<-read.csv("april2_functions_data/all-metagenome-annotation-taxonomy-1000bps.txt")
+functions$domain<-gsub("_p__.*$","",functions$taxa)
+
+#get archaeal contigs out-
+functions_archaea<-functions%>%filter(domain=="d__Archaea")
+
+
+#sum by annotation + tpm-
+setDT(functions_archaea)
+functions_archaea_genes<-functions_archaea[, .(TPM = sum(TPM)), by = .(sample_names,annotation)]
+
+#spread the data-
+library(tidyr)
+functions_archaea_genes_spread<-as.data.frame(spread(functions_archaea_genes,annotation,TPM))
+rownames(functions_archaea_genes_spread)<-functions_archaea_genes_spread$sample_names
+
+
+#get 129 samples out-
+#termite time tree
+newtree_129samples<-read.tree("1000bps_taxonomy_129taxa_tree.nwk")
+dnew2<-data.frame(label=newtree_129samples$tip.label)
+
+dnew2$label<-as.character(dnew2$label)
+dnew2$runnumber<-unlist(lapply(strsplit(dnew2$label,split="-"),"[",1))
+dnew2$runnumber<-gsub("_","-",dnew2$runnumber)
+
+functions_archaea_genes_spread2<-merge(functions_archaea_genes_spread,dnew2,by.x="sample_names",by.y="runnumber",all.y=TRUE)
+rownames(functions_archaea_genes_spread2)<-functions_archaea_genes_spread2$label
+
+#order the rownames by termite tree to get samples with no data at this step!
+functions_archaea_genes_spread2<-functions_archaea_genes_spread2[match(newtree_129samples$tip.label,rownames(functions_archaea_genes_spread2)), ]
+
+
+#extract mcr genes out-
+mcr<-c("K00399","K00401","K00402")
+functions_archaea_genes_spread2$mcr<-functions_archaea_genes_spread2%>%select("K00399","K00401","K00402")%>%rowSums(na.rm=TRUE)
+functions_archaea_genes_spread2<-functions_archaea_genes_spread2%>%select(-c("K00399","K00401","K00402"))
+
+write.csv(functions_archaea_genes_spread2,file="april2_functions_data/archaea_metabolicgenes-rawtpm_129samples.csv")
+```
+
+##filters and clr-transformation of methanogenesis data-
+```{r}
+functions<-read.csv("april2_kofam30evalue_functions_data/archaea_metabolicgenes-rawtpm_129samples.csv",row.names=1) 
+
+#clr transform the data-
+clr_transform<-function(filename_spread2){ 
+library(propr) 
+filename_spread2[is.na(filename_spread2)] <-0 #convert NA to zero
+#rownames(filename_spread2)<-filename_spread2$label
+filename_spread2$label<-NULL
+filename_spread2$samples<-NULL
+filename_spread2$X<-NULL
+#add psuedo counts to account for missing and not-present data-
+filename_spread2<-filename_spread2+0.65
+
+filename_propr<-propr(filename_spread2,metric="rho",ivar="clr")
+
+#creating a df with all the transformed pathways and metadata-
+filename_propr_df<-filename_propr@logratio
+
+return(filename_propr_df)
+}
+
+functions_clr<-clr_transform(functions)
+#rownames(functions_clr)<-functions$label
+
+
+write.csv(functions_clr,file="april2_kofam30evalue_functions_data/archaea_metabolicgenes-clr_129samples.csv")
+#---------------------------------------------------------------------------------------------
+#mcrABG methanogenesis genes -
+
+##NOTE- Not performing any filtering ON mcrABG genes separetly as mcrABG genes are present in ~33 termite samples. So it already meets all the criteria for filtering.
+
+functions_clr_mcr<-functions_clr%>%select(mcr)
+write.csv(functions_clr_mcr,file="april2_kofam30evalue_functions_data/mcr_archaea_april2021.csv")
+
+
+```
+
+##stats on methanogenesis data-
+```{r}
+##tests-
+
+tree<-read.tree("1000bps_taxonomy_129taxa_tree.nwk")
+
+functions<-read.csv("april2_kofam30evalue_functions_data/mcr_archaea_april2021.csv")
+functions<-functions[match(tree$tip.label,functions$X), ] #match the tree
+rownames(functions)<-functions$X
+functions$X<-NULL
+
+sampleinfo<-read.csv("taxonomy/sample_names_ids_withotherfactors_tomedit.2.csv")
+rownames(sampleinfo)<-sampleinfo$termite_tree_labels
+sampleinfo<-sampleinfo[match(tree$tip.label,rownames(sampleinfo)), ] #match the tree
+
+#run phylo.signal-<get signficiant p.values for phylogenetic correlation for each taxa>
+library(adephylo)
+library(ape)
+library(phylobase)
+library(phylosignal)
+
+#clr transformed data with 0 values-<all funcs>
+p4d <- phylo4d(tree,functions)
+p2<-phyloSignal(p4d = p4d, method = "I",reps = 9999)
+
+#adjusted p-value using Benjamini & Hochberg method ("BH") or fdr method-
+mod2 = as.data.frame(p2$pvalue)
+mod2$padjusted_lambda<-p.adjust(mod2$I, method='fdr')
+mod2$functions<-rownames(mod2)
+mod2<-mod2%>%dplyr::mutate(significance_padjusted=ifelse(padjusted_lambda<0.05,"*",""))
+mod2<-mod2%>%mutate(significance_I=ifelse(I<0.05,"*",""))
+
+write.csv(mod2,file="april2_kofam30evalue_functions_data/phylogenetic_autocorrelation_mcr_methanogenesis_129samples_april2021.csv")
+#--------------------------------------------------------------------------
+#phyl.pca-
+library(geomorph)
+functions<-functions+100 #add a constant to every value
+
+
+phyl.anova.func2_list<-function(filename){
+filename<-as.data.frame(t(filename)) #convert row to column
+filename$label<-rownames(filename)
+geo_functions<-merge(filename,sampleinfo,by.x="label",by.y="termite_tree_labels")
+geo_functions<-geo_functions[match(tree$tip.label,geo_functions$label), ] #match the tree
+geo_functions$diet_type_number4<-as.factor(geo_functions$diet_type_number4)
+geo_functions[,2]<-as.numeric(geo_functions[,2])
+
+gdf <- geomorph.data.frame(abundance = geo_functions[,2], diet = as.factor(geo_functions$diet_type_number4), phy = tree) #create a dataframe that contains the data and phylogeny. [according to google forum]
+
+#group_name <- names(filename)[2] #get the correct column name. column 2 is the cazyme.
+
+geomorph.lm<-procD.lm(abundance ~ diet, iter=99999,RRPP=TRUE,effect.type = "F", SS.type = "II" ,data=gdf,print.progress = FALSE) #SS.type="II" is used if the groups (i.e. diet/lineage) are of uneven sizes.
+mod<-anova(geomorph.lm) #to examine if there is a phylogenetic correlation between "y" and "x"
+mod2<-as.data.frame(mod$table)
+mod2<-mod2[1,7]
+# d is distance between vector lengths is the difference in the amount of shape change per unit of size. If d is 0.05 i.e., | 0.20 - 0.15 |.  Why do this?  Two vectors can be correlated in direction - the way shape changes with size - but one group can exhibit more shape change per unit size than the other
+#D tells us the effect size of the standard deviation between two groups. Positive and above 0.2-0.3 means larger positive difference, while negative and below -0.2 to -0.3 means larger negative difference.
+
+pw<-pairwise(geomorph.lm,groups = as.factor(gdf$diet))
+pw_summary<-summary(pw,confidence=0.95,show.vectors = TRUE)
+pw_summary2<-as.data.frame(pw_summary$summary.table)
+
+pw_summary2$padjust<-p.adjust(pw_summary2$`Pr > d`,method="fdr") #fdr correction of p.value
+pw_summary2$diets<-rownames(pw_summary2)
+
+#convert the output to correct formats-
+names<-colnames(geo_functions[2])
+pw_summary2$genename<-rep(names,times=nrow(pw_summary2))
+library(tidyr)
+pw_summary3<-pw_summary2%>%dplyr::select("padjust","diets","genename")
+pw_spread<-pw_summary3%>%spread(diets,padjust)
+pw_spread2<-cbind(pw_spread,mod2)
+
+return(pw_spread2)
+}
+
+functions_t<-as.data.frame(t(functions))
+xy.list <-  split(functions_t, seq(nrow(functions_t))) #convert df to a list
+
+kegg_geomorph<-lapply(xy.list,phyl.anova.func2_list) #apply on all columns
+
+kegg_geomorph_df<-do.call(rbind.data.frame,kegg_geomorph)
+write.csv(kegg_geomorph_df,file="april2_kofam30evalue_functions_data/Phylogenetic_anova_withdiet_mcr_methanogenesis_129samples_march2021.csv")
+
+kegg_geomorph_df<-read.csv("C:/Users/jigyasa-arora.OIST/Documents/Phylogenetic_anova_withdiet_mcr_methanogenesis_129samples_march2021_2.csv")
+kegg_geomorph_df<-kegg_geomorph_df%>%mutate(new1.2=ifelse(X1.2<0.05 & X1.2>0.01,"*",ifelse(X1.2<0.01 & X1.2>0.001,"**",ifelse(X1.2<0.001,"***","not-significant"))))
+kegg_geomorph_df<-kegg_geomorph_df%>%mutate(new1.3=ifelse(X1.3<0.05 & X1.3>0.01,"*",ifelse(X1.3<0.01 & X1.3>0.001,"**",ifelse(X1.3<0.001,"***","not-significant"))))
+kegg_geomorph_df<-kegg_geomorph_df%>%mutate(new1.5=ifelse(X1.5<0.05 & X1.5>0.01,"*",ifelse(X1.5<0.01 & X1.5>0.001,"**",ifelse(X1.5<0.001,"***","not-significant"))))
+kegg_geomorph_df<-kegg_geomorph_df%>%mutate(new2.3=ifelse(X2.3<0.05 & X2.3>0.01,"*",ifelse(X2.3<0.01 & X2.3>0.001,"**",ifelse(X2.3<0.001,"***","not-significant"))))
+kegg_geomorph_df<-kegg_geomorph_df%>%mutate(new2.5=ifelse(X2.5<0.05 & X2.5>0.01,"*",ifelse(X2.5<0.01 & X2.5>0.001,"**",ifelse(X2.5<0.001,"***","not-significant"))))
+kegg_geomorph_df<-kegg_geomorph_df%>%mutate(new3.5=ifelse(X3.5<0.05 & X3.5>0.01,"*",ifelse(X3.5<0.01 & X3.5>0.001,"**",ifelse(X3.5<0.001,"***","not-significant"))))
+
+write.csv(kegg_geomorph_df,"C:/Users/jigyasa-arora.OIST/Documents/Phylogenetic_anova_withdiet_mcr_methanogenesis_129samples_march2021_2.csv")
+#---------------------------------------------------------------------------
+##mcrABG in different diets-<clr-transformed>
+
+methano_archaea<-read.csv("april2_functions_data/mcr_archaea_april2021.csv")
+
+sampleinfo<-read.csv("taxonomy/sample_names_ids_withotherfactors_tomedit.2.csv")
+
+methano_archaea_samples<-merge(methano_archaea,sampleinfo,by.x="X",by.y="termite_tree_labels")
+setDT(methano_archaea_samples)
+methano_diet<-methano_archaea_samples[, .(mcr = sum(mcr)), by = .(diet_type_number4)]
+methano_diet$diet_type_number4<-gsub("^","diet_",methano_diet$diet_type_number4)
+rownames(methano_diet)<-methano_diet$diet_type_number4
+
+methano_diet
+#----------------------------------------------------------------------------
+##mcrABG in specific termite samples-
+methano_archaea%>%arrange(desc(mcr))%>%head(10)
+
+#-----------------------------------------------------------------------
+#mcrABG mean in different diets <raw tpm>-
+
+methano_archaea<-read.csv("april2_kofam30evalue_functions_data/archaea_metabolicgenes-rawtpm_129samples.csv")
+methano_archaea<-methano_archaea%>%select(X,mcr)
+
+sampleinfo<-read.csv("taxonomy/sample_names_ids_withotherfactors_tomedit.2.csv")
+
+methano_archaea_samples<-merge(methano_archaea,sampleinfo,by.x="X",by.y="termite_tree_labels")
+setDT(methano_archaea_samples)
+methano_diet<-methano_archaea_samples[, .(mcr = mean(mcr)), by = .(diet_type_number4)]
+methano_diet$diet_type_number4<-gsub("^","diet_",methano_diet$diet_type_number4)
+rownames(methano_diet)<-methano_diet$diet_type_number4
+
+```
+
+
+##mcrABG gene operons from metagenomes-
+```{r}
+##mcrABG-
+
+functions<-read.csv("april2_kofam30evalue_functions_data/all-metagenome-annotation-taxonomy-1000bps.txt")
+functions$domain<-gsub("_p__.*$","",functions$taxa)
+
+#get archaeal contigs out-
+functions_archaea<-functions%>%filter(domain=="d__Archaea")
+
+#get gene of interest out-
+
+genes_vector<-as.vector(c("K00399","K00401","K00402"))
+
+methano_data<-functions_archaea%>%filter(annotation %in% genes_vector) #condition1
+
+#sum TPM per gene, per contig-
+library(data.table)
+setDT(methano_data)
+genes<-methano_data[, .(TPM = sum(TPM)), by = .(samples,annotation,contig_names)]
+
+contig_count<-genes%>%group_by(samples,contig_names)%>%count()
+#contig_count2<-contig_count #for one kegg input gene
+contig_count2<-contig_count%>%filter(n>1) 
+
+#extract contigs with more than 1 methanogenesis genes-
+methano_contigs<-methano_data%>%filter(samples %in% contig_count2$samples & contig_names %in% contig_count2$contig_names)
+methano_contigs$sample_contigs<-paste(methano_contigs$samples,methano_contigs$contig_names,sep="__")
+methano_contigs2<-methano_contigs%>%select(sample_contigs,annotation,TPM)
+
+methano_contigs3<-unique(methano_contigs2) #if duplicates are present!
+#spread the data-
+library(tidyr)
+#if unique combinations of keys are not present-
+methano_contigs_spread<-methano_contigs3%>%group_by(sample_contigs,annotation)%>%mutate(grouped_id=row_number())%>%spread(annotation,TPM)%>%select(-grouped_id)
+
+#add taxa name-
+methano_contigs_spread$contig_names<-gsub("^.*__","",methano_contigs_spread$sample_contigs)
+methano_contigs_spread$samples<-gsub("__.*$","",methano_contigs_spread$sample_contigs)
+
+methano_data_sub<-methano_data%>%select(samples,contig_names,taxa)
+methano_data_sub2<-unique(methano_data_sub)
+methano_contigs_spread2<-merge(methano_contigs_spread,methano_data_sub2,by=c("contig_names","samples"))
+
+#add termite information-
+termites<-read.csv("taxonomy/sample_names_ids_withotherfactors_tomedit.2.csv")
+methano_contigs_final<-merge(methano_contigs_spread2,termites,by.x="samples",by.y="samples")
+
+#select non zero columns-
+methano_contigs_final2<-methano_contigs_final %>% drop_na() #selecting all non-zero values
+#methano_contigs_final2$phyla<-unlist(lapply(strsplit(as.character(methano_contigs_final2$taxa),split="_"),"[",2))
+write.csv(methano_contigs_final2,file="april2_kofam30evalue_functions_data/methanogenesis_mcrABG_operon_contigs.csv")
+
+#-----------------------------------------------------------------------------------------------
+#stats-
+
+#1.how many archaeal families and orders are present in the operon?
+methano_contigs_final2$taxa_family<-gsub("_g__.*$","",methano_contigs_final2$taxa)
+methano_contigs_final2$taxa_order<-gsub("_f__.*$","",methano_contigs_final2$taxa)
+
+methano_contigs_final2%>%select(taxa_family)%>%group_by(taxa_family)%>%count()
+methano_contigs_final2%>%select(taxa_order)%>%group_by(taxa_order)%>%count()
+
+#2. how many termite species and lineages are present?
+methano_contigs_final2%>%select(species_name)%>%group_by(species_name)%>%count()
+methano_contigs_final2%>%select(lineage,higher_lower)%>%group_by(lineage,higher_lower)%>%count()
+
+#3. methanogenesis by termite lineages
+methano_contigs_final2%>%filter(higher_lower=="lower")
+
+
+#4. how many contigs have marker-genes in them?
+markergenes<-read.csv("taxonomy/all-cogs-taxonomy-contiginfo-tpm-filtered-corrected.csv",row.names=1)
+markergenes<-markergenes%>%select(annotation,contig_names,samples)
+markergenes$sample_contigs<-paste(markergenes$samples,markergenes$contig_names,sep="__")
+setDT(markergenes)
+markergenes2<-as.data.table(markergenes)[, toString(annotation), by = list(samples,contig_names,sample_contigs)] #get marker-genes per contig
+
+methano_contigs_markers<-merge(methano_contigs_final2,markergenes2,by.x=c("sample_names","contig_names","sample_contigs"),by.y=c("samples","contig_names","sample_contigs"),all.x=TRUE)
+
+```
+
+
+##nifHDKENB and nifHDK gene operons from metagenomes-
+```{r}
+##nifHDKENB-
+
+functions<-read.csv("april2_kofam30evalue_functions_data/all-metagenome-annotation-taxonomy-5000bps.txt")
+functions$domain<-gsub("_p__.*$","",functions$taxa)
+
+#get gene of interest out-
+genes_vector<-as.vector(c("K02586","K02591","K02588","K02587","K02592","K02585"))
+
+methano_data<-functions%>%filter(annotation %in% genes_vector) #condition1
+
+#sum TPM per gene, per contig-
+library(data.table)
+setDT(methano_data)
+genes<-methano_data[, .(TPM = sum(TPM)), by = .(samples,annotation,contig_names)]
+
+contig_count<-genes%>%group_by(samples,contig_names)%>%count()
+#contig_count2<-contig_count #for one kegg input gene
+contig_count2<-contig_count%>%filter(n>1) 
+
+#extract contigs with more than 1 nitrogen fixation genes-
+methano_contigs<-methano_data%>%filter(samples %in% contig_count2$samples & contig_names %in% contig_count2$contig_names)
+methano_contigs$sample_contigs<-paste(methano_contigs$samples,methano_contigs$contig_names,sep="__")
+methano_contigs2<-methano_contigs%>%select(sample_contigs,annotation,TPM)
+
+methano_contigs3<-unique(methano_contigs2) #if duplicates are present!
+#spread the data-
+library(tidyr)
+#if unique combinations of keys are not present-
+methano_contigs_spread<-methano_contigs3%>%group_by(sample_contigs,annotation)%>%mutate(grouped_id=row_number())%>%spread(annotation,TPM)%>%select(-grouped_id)
+
+#add taxa name-
+methano_contigs_spread$contig_names<-gsub("^.*__","",methano_contigs_spread$sample_contigs)
+methano_contigs_spread$samples<-gsub("__.*$","",methano_contigs_spread$sample_contigs)
+
+methano_data_sub<-methano_data%>%select(samples,contig_names,taxa)
+methano_data_sub2<-unique(methano_data_sub)
+methano_contigs_spread2<-merge(methano_contigs_spread,methano_data_sub2,by=c("contig_names","samples"))
+
+#add termite information-
+termites<-read.csv("taxonomy/sample_names_ids_withotherfactors_tomedit.2.csv")
+methano_contigs_final<-merge(methano_contigs_spread2,termites,by.x="samples",by.y="samples")
+
+#select non zero columns-
+methano_contigs_final2<-methano_contigs_final %>% drop_na() #selecting all non-zero values
+methano_contigs_final2<-methano_contigs_final2%>%filter(taxa!="d__Bacteria")
+write.csv(methano_contigs_final2,file="nifHDKENB_operon_metagenomecontigs.csv")
+
+#-----------------------------------------------------------------------------------------------
+#stats-
+
+#1.how many bacterial families and orders are present in the operon?
+methano_contigs_final2$taxa_phyla<-gsub("_c__.*$","",methano_contigs_final2$taxa)
+
+methano_contigs_final2%>%select(taxa_phyla)%>%group_by(taxa_phyla)%>%count()
+methano_contigs_final2%>%filter(taxa_phyla=="d__Bacteria_p__Spirochaetota")
+methano_contigs_final2%>%filter(taxa_phyla=="d__Archaea_p__Methanobacteriota")
+
+#2. how many termite species and lineages are present?
+methano_contigs_final2%>%select(species_name)%>%group_by(species_name)%>%count()
+methano_contigs_final2%>%select(lineage,higher_lower)%>%group_by(lineage,higher_lower)%>%count()
+
+#3. methanogenesis by termite lineages
+methano_contigs_final2%>%filter(higher_lower=="lower")
+
+
+#4. how many contigs have marker-genes in them?
+markergenes<-read.csv("taxonomy/all-cogs-taxonomy-contiginfo-tpm-filtered-corrected.csv",row.names=1)
+markergenes<-markergenes%>%select(annotation,contig_names,samples)
+markergenes$sample_contigs<-paste(markergenes$samples,markergenes$contig_names,sep="__")
+setDT(markergenes)
+markergenes2<-as.data.table(markergenes)[, toString(annotation), by = list(samples,contig_names,sample_contigs)] #get marker-genes per contig
+
+methano_contigs_markers<-merge(methano_contigs_final2,markergenes2,by.x=c("sample_names","contig_names","sample_contigs"),by.y=c("samples","contig_names","sample_contigs"),all.x=TRUE)
+
+##-------------------------------------------------------------------------------------------------
+##-------------------------------------------------------------------------------------------------
+#nifHDK-
+
+##FROM 1000bps contigs-
+functions<-read.csv("functions/all-metagenome-annotation-taxonomy-1000bps.txt")
+functions$domain<-gsub("_p__.*$","",functions$taxa)
+
+#get gene of interest out-
+genes_vector<-as.vector(c("K02586","K02591","K02588"))
+
+methano_data<-functions%>%filter(annotation %in% genes_vector) #condition1
+
+#sum TPM per gene, per contig-
+library(data.table)
+setDT(methano_data)
+genes<-methano_data[, .(TPM = sum(TPM)), by = .(samples,annotation,contig_names)]
+
+contig_count<-genes%>%group_by(samples,contig_names)%>%count()
+#contig_count2<-contig_count #for one kegg input gene
+contig_count2<-contig_count%>%filter(n>1) 
+
+#extract contigs with more than 1 nitrogen fixation genes-
+methano_contigs<-methano_data%>%filter(samples %in% contig_count2$samples & contig_names %in% contig_count2$contig_names)
+methano_contigs$sample_contigs<-paste(methano_contigs$samples,methano_contigs$contig_names,sep="__")
+methano_contigs2<-methano_contigs%>%select(sample_contigs,annotation,TPM)
+
+methano_contigs3<-unique(methano_contigs2) #if duplicates are present!
+#spread the data-
+library(tidyr)
+#if unique combinations of keys are not present-
+methano_contigs_spread<-methano_contigs3%>%group_by(sample_contigs,annotation)%>%mutate(grouped_id=row_number())%>%spread(annotation,TPM)%>%select(-grouped_id)
+
+#add taxa name-
+methano_contigs_spread$contig_names<-gsub("^.*__","",methano_contigs_spread$sample_contigs)
+methano_contigs_spread$samples<-gsub("__.*$","",methano_contigs_spread$sample_contigs)
+
+methano_data_sub<-methano_data%>%select(samples,contig_names,taxa)
+methano_data_sub2<-unique(methano_data_sub)
+methano_contigs_spread2<-merge(methano_contigs_spread,methano_data_sub2,by=c("contig_names","samples"))
+
+#add termite information-
+termites<-read.csv("taxonomy/sample_names_ids_withotherfactors_tomedit.2.csv")
+methano_contigs_final<-merge(methano_contigs_spread2,termites,by.x="samples",by.y="samples")
+
+#select non zero columns-
+methano_contigs_final2<-methano_contigs_final %>% drop_na() #selecting all non-zero values
+methano_contigs_final2<-methano_contigs_final2%>%filter(taxa!="d__Bacteria")
+write.csv(methano_contigs_final2,file="april2_kofam30evalue_functions_data/nifHDK_operon_1000bpscontigs_metagenomecontigs.csv")
+
+
+#4. how many contigs have marker-genes in them?
+markergenes<-read.csv("taxonomy/all-cogs-taxonomy-contiginfo-tpm-filtered-corrected.csv",row.names=1)
+markergenes<-markergenes%>%select(annotation,contig_names,samples)
+markergenes$sample_contigs<-paste(markergenes$samples,markergenes$contig_names,sep="__")
+setDT(markergenes)
+markergenes2<-as.data.table(markergenes)[, toString(annotation), by = list(samples,contig_names,sample_contigs)] #get marker-genes per contig
+
+methano_contigs_markers<-merge(methano_contigs_final2,markergenes2,by.x=c("samples","contig_names","sample_contigs"),by.y=c("samples","contig_names","sample_contigs"),all.x=TRUE)
+
+#------------------------------------------------------------------------------------------------------
+##FROM 5000BPS CONTIG-
+
+functions<-read.csv("april2_kofam30evalue_functions_data/all-metagenome-annotation-taxonomy-5000bps.txt")
+functions$domain<-gsub("_p__.*$","",functions$taxa)
+
+#get gene of interest out-
+genes_vector<-as.vector(c("K02586","K02591","K02588"))
+
+methano_data<-functions%>%filter(annotation %in% genes_vector) #condition1
+
+#sum TPM per gene, per contig-
+library(data.table)
+setDT(methano_data)
+genes<-methano_data[, .(TPM = sum(TPM)), by = .(samples,annotation,contig_names)]
+
+contig_count<-genes%>%group_by(samples,contig_names)%>%count()
+#contig_count2<-contig_count #for one kegg input gene
+contig_count2<-contig_count%>%filter(n>1) 
+
+#extract contigs with more than 1 nitrogen fixation genes-
+methano_contigs<-methano_data%>%filter(samples %in% contig_count2$samples & contig_names %in% contig_count2$contig_names)
+methano_contigs$sample_contigs<-paste(methano_contigs$samples,methano_contigs$contig_names,sep="__")
+methano_contigs2<-methano_contigs%>%select(sample_contigs,annotation,TPM)
+
+methano_contigs3<-unique(methano_contigs2) #if duplicates are present!
+#spread the data-
+library(tidyr)
+#if unique combinations of keys are not present-
+methano_contigs_spread<-methano_contigs3%>%group_by(sample_contigs,annotation)%>%mutate(grouped_id=row_number())%>%spread(annotation,TPM)%>%select(-grouped_id)
+
+#add taxa name-
+methano_contigs_spread$contig_names<-gsub("^.*__","",methano_contigs_spread$sample_contigs)
+methano_contigs_spread$samples<-gsub("__.*$","",methano_contigs_spread$sample_contigs)
+
+methano_data_sub<-methano_data%>%select(samples,contig_names,taxa)
+methano_data_sub2<-unique(methano_data_sub)
+methano_contigs_spread2<-merge(methano_contigs_spread,methano_data_sub2,by=c("contig_names","samples"))
+
+#add termite information-
+termites<-read.csv("taxonomy/sample_names_ids_withotherfactors_tomedit.2.csv")
+methano_contigs_final<-merge(methano_contigs_spread2,termites,by.x="samples",by.y="samples")
+
+#select non zero columns-
+methano_contigs_final2<-methano_contigs_final %>% drop_na() #selecting all non-zero values
+methano_contigs_final2<-methano_contigs_final2%>%filter(taxa!="d__Bacteria")
+write.csv(methano_contigs_final2,file="april2_kofam30evalue_functions_data/nifHDK_operon_5000bpscontigs_metagenomecontigs.csv")
+
+#4. how many contigs have marker-genes in them?
+markergenes<-read.csv("taxonomy/all-cogs-taxonomy-contiginfo-tpm-filtered-corrected.csv",row.names=1)
+markergenes<-markergenes%>%select(annotation,contig_names,samples)
+markergenes$sample_contigs<-paste(markergenes$samples,markergenes$contig_names,sep="__")
+setDT(markergenes)
+markergenes2<-as.data.table(markergenes)[, toString(annotation), by = list(samples,contig_names,sample_contigs)] #get marker-genes per contig
+
+methano_contigs_markers<-merge(methano_contigs_final2,markergenes2,by.x=c("sample_names","contig_names","sample_contigs"),by.y=c("samples","contig_names","sample_contigs"),all.x=TRUE)
+
+#-------------------------------------------------------------------------------------
+##NOTE- Number of nifHDK containing contigs in metagenomes above 1000bps and 5000bps is exactly the same. Number of marker-gene containing nifHDK contigs is also exactly the same (9 contigs out of 37 contigs). So, 5000bp contigs stats is used.
+
+#stats-
+
+
+methano_contigs_final2$taxa_phyla<-gsub("_c__.*$","",methano_contigs_final2$taxa)
+
+
+#how many Bacteroidota in lower termites-
+methano_contigs_final2%>%filter(higher_lower=="lower")%>%select(taxa_phyla)%>%group_by(taxa_phyla)%>%count()
+bacteroidota_lower<-methano_contigs_final2%>%filter(higher_lower=="lower" & taxa_phyla=="d__Bacteria_p__Bacteroidota")
+
+#how many Bacteroidota in higher termites-
+methano_contigs_final2%>%filter(taxa_phyla=="d__Bacteria_p__Bacteroidota" & higher_lower=="higher")
+
+#how many Bacteroidota in Heterotermes_Coptotermes-
+methano_contigs_final2%>%filter(taxa_phyla=="d__Bacteria_p__Bacteroidota" & lineage2=="Heterotermes_Coptotermes")
+
+#how many Bacteroidota in no Heterotermes_Coptotermes lower termites-
+methano_contigs_final2%>%filter(higher_lower=="lower" & taxa_phyla=="d__Bacteria_p__Bacteroidota" & lineage2!="Heterotermes_Coptotermes")
+
+#how many termite lineages in no Heterotermes_Coptotermes lower termites-
+methano_contigs_final2%>%filter(higher_lower=="lower" & taxa_phyla=="d__Bacteria_p__Bacteroidota" & lineage2!="Heterotermes_Coptotermes")%>%select(lineage)%>%group_by(lineage)%>%count()
+
+#which is the most dominant phyla in higher termites-
+methano_contigs_final2%>%filter(higher_lower=="higher")%>%select(taxa_phyla)%>%group_by(taxa_phyla)%>%count()
+
+
+#which is the most dominant phyla in Microcerotermes-
+methano_contigs_final2%>%filter(lineage=="Microcerotermes")%>%select(taxa_phyla)%>%group_by(taxa_phyla)%>%count()
+
+methano_contigs_final2%>%filter(lineage=="Microcerotermes")%>%select(taxa)
+
+#which is the most dominant phyla in wood-feeding lower termites-
+methano_contigs_final2%>%filter(diet_type_number4=="2")%>%select(taxa_phyla)%>%group_by(taxa_phyla)%>%count()
+methano_contigs_final2%>%filter(diet_type_number4=="2" & taxa_phyla=="d__Bacteria_p__Fibrobacterota")
+
+#taxa specific trends-
+methano_contigs_final2%>%filter(taxa_phyla=="d__Bacteria_p__Bacteroidota" & higher_lower=="higher")
+
+methano_contigs_final2%>%filter(taxa_phyla=="d__Bacteria_p__Spirochaetota" & higher_lower=="lower")
+```
+
+
+
+
+
+
+##reductive acetogenesis genes from MAGs-<adding metV, hndABCD, HDCRcomplex>
+```{r}
+reductive_mags<-read.csv("kofam-gtdb-ikedaohtsubo-bacterial-spreadbinary-ordered.csv") #kegg+blast feb2021
+
+#genes to add-
+metv_kegg<-read.csv("wood-ljungdahl-metV-evalue30-kofamoutput-spreadbinary.txt")
+hnd_kegg<-read.csv("wood-ljungdahl-hydABCD-kofamoutput-spreadbinary.txt")
+metv_hnd_blast<-read.csv("notkofam-above60perc-100bp-gtdb-metV-hndABCD-matches-all-bins-proteins-spreadbinary.txt")
+fefe<-read.csv("fefe-GroupA4-conservedmotifs-proteins-spreadbinary.txt")
+fefe_aux<-read.csv("group4a_othersubunits_binaryspread.csv")
+hycb3<-read.csv("wood-ljungdahl-hycB3-evalue30-kofamoutput-counts.txt")
+rnf<-read.csv("wood-ljungdahl-rnfcomplex-atpsynthase-kofamoutput-spreadbinary.txt")
+rnf_blast<-read.csv("notkofam-above60perc100aagtdb-rnf-atpsynthase-matches-all-bins-proteins-binaryspread.txt")
+
+#note-fefe group4a was searched by- hyddb annotation + alignment of all fefe groupA proteins and manual identification of the groupa4 motifs.
+
+#-------------------------------------------------------------------------------------
+#how many MAGs have fefe groupa4 + its auxillary subunits?
+reductive_mags_fefeaux<-merge(reductive_mags,fefe_aux,by.x=c("file_name","classification","completeness","contamination","gc","N50","size"),by.y=c("V1","classification","completeness","contamination","gc","N50","size"),all=TRUE)
+reductive_mags_fefeaux_fefe<-merge(reductive_mags_fefeaux,fefe,by=c("file_name","classification","completeness","contamination","gc","N50","size"),all=TRUE)
+#write.csv(reductive_mags_fefeaux_fefe,file="kofam-gtdb-ikedaohtsubo-hdcr-spreadbinary.csv") #51 mags
+
+#-------------------------------------------------------------------------------------
+#joining metv+hndABCD+rnf-
+joined<-merge(hnd_kegg,metv_kegg,by.x=c("file_name","classification","completeness","contamination","gc","N50","size"),by.y=c("V1","classification","completeness","contamination","gc","N50","size"),all=TRUE)
+
+joined0<-merge(joined,metv_hnd_blast,by=c("file_name","classification","completeness","contamination","gc","N50","size"),all=TRUE)
+
+joined1<-merge(joined0,rnf,by=c("file_name","classification","completeness","contamination","gc","N50","size"),all=TRUE)
+
+joined2<-merge(joined1,rnf_blast,by=c("file_name","classification","completeness","contamination","gc","N50","size"),all=TRUE)
+
+joined2[is.na(joined2)] <- 0
+joined2$X.1.x<-NULL
+joined2$X.1.y<-NULL
+joined2$X.x<-NULL
+joined2$X.y<-NULL
+joined2$X.1<-NULL
+joined2$X<-NULL
+
+#convert all koids-
+#K17992
+joined2<-joined2%>%mutate(K17992=ifelse(K17992.x=="1" & K17992.y=="1","1",ifelse(K17992.x=="0" & K17992.y=="1","1*",ifelse(K17992.x=="1" & K17992.y=="0","1","0"))))
+joined2$K17992.x<-NULL
+joined2$K17992.y<-NULL
+
+#K18330
+joined2<-joined2%>%mutate(K18330=ifelse(K18330.x=="1" & K18330.y=="1","1",ifelse(K18330.x=="0" & K18330.y=="1","1*",ifelse(K18330.x=="1" & K18330.y=="0","1","0"))))
+joined2$K18330.x<-NULL
+joined2$K18330.y<-NULL
+
+#K18331
+joined2<-joined2%>%mutate(K18331=ifelse(K18331.x=="1" & K18331.y=="1","1",ifelse(K18331.x=="0" & K18331.y=="1","1*",ifelse(K18331.x=="1" & K18331.y=="0","1","0"))))
+joined2$K18331.x<-NULL
+joined2$K18331.y<-NULL
+
+#K18332
+joined2<-joined2%>%mutate(K18332=ifelse(K18332.x=="1" & K18332.y=="1","1",ifelse(K18332.x=="0" & K18332.y=="1","1*",ifelse(K18332.x=="1" & K18332.y=="0","1","0"))))
+joined2$K18332.x<-NULL
+joined2$K18332.y<-NULL
+
+#PF12225
+joined2<-joined2%>%mutate(PF12225=ifelse(PF12225.x=="1" & PF12225.y=="1","1",ifelse(PF12225.x=="0" & PF12225.y=="1","1*",ifelse(PF12225.x=="1" & PF12225.y=="0","1","0"))))
+joined2$PF12225.x<-NULL
+joined2$PF12225.y<-NULL
+
+
+#K02111
+joined2<-joined2%>%mutate(K02111=ifelse(K02111.x=="1" & K02111.y=="1","1",ifelse(K02111.x=="0" & K02111.y=="1","1*",ifelse(K02111.x=="1" & K02111.y=="0","1","0"))))
+joined2$K02111.x<-NULL
+joined2$K02111.y<-NULL
+
+#K02112
+joined2<-joined2%>%mutate(K02112=ifelse(K02112.x=="1" & K02112.y=="1","1",ifelse(K02112.x=="0" & K02112.y=="1","1*",ifelse(K02112.x=="1" & K02112.y=="0","1","0"))))
+joined2$K02112.x<-NULL
+joined2$K02112.y<-NULL
+
+#K03612
+joined2<-joined2%>%mutate(K03612=ifelse(K03612.x=="1" & K03612.y=="1","1",ifelse(K03612.x=="0" & K03612.y=="1","1*",ifelse(K03612.x=="1" & K03612.y=="0","1","0"))))
+joined2$K03612.x<-NULL
+joined2$K03612.y<-NULL
+
+#K03613
+joined2<-joined2%>%mutate(K03613=ifelse(K03613.x=="1" & K03613.y=="1","1",ifelse(K03613.x=="0" & K03613.y=="1","1*",ifelse(K03613.x=="1" & K03613.y=="0","1","0"))))
+joined2$K03613.x<-NULL
+joined2$K03613.y<-NULL
+
+#K03614
+joined2<-joined2%>%mutate(K03614=ifelse(K03614.x=="1" & K03614.y=="1","1",ifelse(K03614.x=="0" & K03614.y=="1","1*",ifelse(K03614.x=="1" & K03614.y=="0","1","0"))))
+joined2$K03614.x<-NULL
+joined2$K03614.y<-NULL
+
+#K03615
+joined2<-joined2%>%mutate(K03615=ifelse(K03615.x=="1" & K03615.y=="1","1",ifelse(K03615.x=="0" & K03615.y=="1","1*",ifelse(K03615.x=="1" & K03615.y=="0","1","0"))))
+joined2$K03615.x<-NULL
+joined2$K03615.y<-NULL
+
+#K03616
+joined2<-joined2%>%mutate(K03616=ifelse(K03616.x=="1" & K03616.y=="1","1",ifelse(K03616.x=="0" & K03616.y=="1","1*",ifelse(K03616.x=="1" & K03616.y=="0","1","0"))))
+joined2$K03616.x<-NULL
+joined2$K03616.y<-NULL
+
+#K03617
+joined2<-joined2%>%mutate(K03617=ifelse(K03617.x=="1" & K03617.y=="1","1",ifelse(K03617.x=="0" & K03617.y=="1","1*",ifelse(K03617.x=="1" & K03617.y=="0","1","0"))))
+joined2$K03617.x<-NULL
+joined2$K03617.y<-NULL
+
+#-----------------------------------------------------------------------------------------------
+#joining all hycb3-
+kofam<-read.csv("wood-ljungdahl-hycB3-evalue30-kofamoutput.txt")
+
+blast<-read.csv("above60-100bps-gtdb-hycB-matches-all-bins-proteins.txt")
+
+blast2<-blast%>%select(file_name,protein_name)%>%unique()
+kofam2<-kofam%>%select(V1,V2)%>%unique()
+
+joined<-merge(blast2,kofam2,by.x=c("file_name","protein_name"),by.y=c("V1","V2"),all=TRUE)
+library(dplyr)
+joined_test<-joined%>%group_by(file_name)%>%count()
+
+magtree2_rename<-read.tree("basicstats/mybins_654_fullnamestree.nwk")
+d<-data.frame(label=magtree2_rename$tip.label)
+d$file_name<-gsub("_.*$","",d$label)
+
+joined_test<-joined_test%>%filter(file_name %in% d$file_name)
+colnames(joined_test)<-c("file_name","PF13247_count")
+write.csv(joined_test,file="kofam-blast-hycB3-counts.csv")
+#-----------------------------------------------------------------------------------------------
+##joining all the files together-
+
+reductive_fefe_joined2_fefe<-merge(reductive_mags_fefeaux_fefe,joined2,by=c("file_name","classification","completeness","contamination","gc","N50","size"),all=TRUE)
+
+#add hycB3-
+hycb3<-read.csv("kofam-blast-hycB3-counts.csv")
+reductive_fefe_joined2_fefe2<-merge(reductive_fefe_joined2_fefe,hycb3,by="file_name",all=TRUE)
+
+write.csv(reductive_fefe_joined2_fefe2,file="kofam-gtdb-ikedaohtsubo-bacterial-metv-hndABCD-HDCR-spreadbinary.csv")
+##this file is used in "basicstats_march2021.Rmd" 
+
+```
+
+
+##methanogenesis MAGs-joining NiFe hydrogenases to methanogenesis genes-
+```{r}
+
+#methanogenesis-
+methano3<-read.csv("methanogenesis_summedbygenes_march2021.csv")
+
+#hydrogenases-
+methano_hydrogenases<-read.csv("nife_ech_frh_vht_hdr_keggoutput_binaryspread_archaea.csv")
+methano_hydrogenases_blast<-read.csv("notkofam-above60perc100aa-gtdb-nife_ech_frh_vht_hdr-matches-all-bins-proteins-binaryspread.txt")
+
+methano_hydrogenases2<-read.csv("nife_hdr_mvh_keggoutput_binaryspread_archaea.csv")
+methano_hydrogenases_blast2<-read.csv("notkofam-above60perc100aa-gtdb-hdrA1B1C1-mvhAGD-matches-all-bins-proteins-binaryspread.csv")
+
+#joining with hydrogenases-
+joined0<-merge(methano_hydrogenases,methano_hydrogenases_blast,by=c("file_name","classification","completeness","contamination","gc","N50","size"),all=TRUE)
+
+joined1<-merge(joined0,methano_hydrogenases2,by=c("file_name","classification","completeness","contamination","gc","N50","size"),all=TRUE)
+
+joined2<-merge(joined1,methano_hydrogenases_blast2,by=c("file_name","classification","completeness","contamination","gc","N50","size"),all=TRUE)
+
+
+joined2[is.na(joined2)] <- 0
+joined2$X.2<-NULL
+joined2$X.1.x<-NULL
+joined2$X.x<-NULL
+joined2$X.1.y<-NULL
+joined2$X.y<-NULL
+
+#convert all koids-
+#K00440
+joined2<-joined2%>%mutate(K00440=ifelse(K00440.x=="1" & K00440.y=="1","1",ifelse(K00440.x=="0" & K00440.y=="1","1*",ifelse(K00440.x=="1" & K00440.y=="0","1","0"))))
+joined2$K00440.x<-NULL
+joined2$K00440.y<-NULL
+
+
+#K00443
+joined2<-joined2%>%mutate(K00443=ifelse(K00443.x=="1" & K00443.y=="1","1",ifelse(K00443.x=="0" & K00443.y=="1","1*",ifelse(K00443.x=="1" & K00443.y=="0","1","0"))))
+joined2$K00443.x<-NULL
+joined2$K00443.y<-NULL
+
+
+#K03388
+joined2<-joined2%>%mutate(K03388=ifelse(K03388.x=="1" & K03388.y=="1","1",ifelse(K03388.x=="0" & K03388.y=="1","1*",ifelse(K03388.x=="1" & K03388.y=="0","1","0"))))
+joined2$K03388.x<-NULL
+joined2$K03388.y<-NULL
+
+#K03389
+joined2<-joined2%>%mutate(K03389=ifelse(K03389.x=="1" & K03389.y=="1","1",ifelse(K03389.x=="0" & K03389.y=="1","1*",ifelse(K03389.x=="1" & K03389.y=="0","1","0"))))
+joined2$K03389.x<-NULL
+joined2$K03389.y<-NULL
+
+#K03390
+joined2<-joined2%>%mutate(K03390=ifelse(K03390.x=="1" & K03390.y=="1","1",ifelse(K03390.x=="0" & K03390.y=="1","1*",ifelse(K03390.x=="1" & K03390.y=="0","1","0"))))
+joined2$K03390.x<-NULL
+joined2$K03390.y<-NULL
+
+#K03612
+joined2<-joined2%>%mutate(K03612=ifelse(K03612.x=="1" & K03612.y=="1","1",ifelse(K03612.x=="0" & K03612.y=="1","1*",ifelse(K03612.x=="1" & K03612.y=="0","1","0"))))
+joined2$K03612.x<-NULL
+joined2$K03612.y<-NULL
+
+#K03613
+joined2<-joined2%>%mutate(K03613=ifelse(K03613.x=="1" & K03613.y=="1","1",ifelse(K03613.x=="0" & K03613.y=="1","1*",ifelse(K03613.x=="1" & K03613.y=="0","1","0"))))
+joined2$K03613.x<-NULL
+joined2$K03613.y<-NULL
+
+#K03614
+joined2<-joined2%>%mutate(K03614=ifelse(K03614.x=="1" & K03614.y=="1","1",ifelse(K03614.x=="0" & K03614.y=="1","1*",ifelse(K03614.x=="1" & K03614.y=="0","1","0"))))
+joined2$K03614.x<-NULL
+joined2$K03614.y<-NULL
+
+#K03615
+joined2<-joined2%>%mutate(K03615=ifelse(K03615.x=="1" & K03615.y=="1","1",ifelse(K03615.x=="0" & K03615.y=="1","1*",ifelse(K03615.x=="1" & K03615.y=="0","1","0"))))
+joined2$K03615.x<-NULL
+joined2$K03615.y<-NULL
+
+#K03616
+joined2<-joined2%>%mutate(K03616=ifelse(K03616.x=="1" & K03616.y=="1","1",ifelse(K03616.x=="0" & K03616.y=="1","1*",ifelse(K03616.x=="1" & K03616.y=="0","1","0"))))
+joined2$K03616.x<-NULL
+joined2$K03616.y<-NULL
+
+#K03617
+joined2<-joined2%>%mutate(K03617=ifelse(K03617.x=="1" & K03617.y=="1","1",ifelse(K03617.x=="0" & K03617.y=="1","1*",ifelse(K03617.x=="1" & K03617.y=="0","1","0"))))
+joined2$K03617.x<-NULL
+joined2$K03617.y<-NULL
+
+#K14068
+joined2<-joined2%>%mutate(K14068=ifelse(K14068.x=="1" & K14068.y=="1","1",ifelse(K14068.x=="0" & K14068.y=="1","1*",ifelse(K14068.x=="1" & K14068.y=="0","1","0"))))
+joined2$K14068.x<-NULL
+joined2$K14068.y<-NULL
+
+#K14070
+joined2<-joined2%>%mutate(K14070=ifelse(K14070.x=="1" & K14070.y=="1","1",ifelse(K14070.x=="0" & K14070.y=="1","1*",ifelse(K14070.x=="1" & K14070.y=="0","1","0"))))
+joined2$K14070.x<-NULL
+joined2$K14070.y<-NULL
+
+#K14086
+joined2<-joined2%>%mutate(K14086=ifelse(K14086.x=="1" & K14086.y=="1","1",ifelse(K14086.x=="0" & K14086.y=="1","1*",ifelse(K14086.x=="1" & K14086.y=="0","1","0"))))
+joined2$K14086.x<-NULL
+joined2$K14086.y<-NULL
+
+#K14087
+joined2<-joined2%>%mutate(K14087=ifelse(K14087.x=="1" & K14087.y=="1","1",ifelse(K14087.x=="0" & K14087.y=="1","1*",ifelse(K14087.x=="1" & K14087.y=="0","1","0"))))
+joined2$K14087.x<-NULL
+joined2$K14087.y<-NULL
+
+#K14088
+joined2<-joined2%>%mutate(K14088=ifelse(K14088.x=="1" & K14088.y=="1","1",ifelse(K14088.x=="0" & K14088.y=="1","1*",ifelse(K14088.x=="1" & K14088.y=="0","1","0"))))
+joined2$K14088.x<-NULL
+joined2$K14088.y<-NULL
+
+#K14090
+joined2<-joined2%>%mutate(K14090=ifelse(K14090.x=="1" & K14090.y=="1","1",ifelse(K14090.x=="0" & K14090.y=="1","1*",ifelse(K14090.x=="1" & K14090.y=="0","1","0"))))
+joined2$K14090.x<-NULL
+joined2$K14090.y<-NULL
+
+#K14126
+joined2<-joined2%>%mutate(K14126=ifelse(K14126.x=="1" & K14126.y=="1","1",ifelse(K14126.x=="0" & K14126.y=="1","1*",ifelse(K14126.x=="1" & K14126.y=="0","1","0"))))
+joined2$K14126.x<-NULL
+joined2$K14126.y<-NULL
+
+#K14127
+joined2<-joined2%>%mutate(K14127=ifelse(K14127.x=="1" & K14127.y=="1","1",ifelse(K14127.x=="0" & K14127.y=="1","1*",ifelse(K14127.x=="1" & K14127.y=="0","1","0"))))
+joined2$K14127.x<-NULL
+joined2$K14127.y<-NULL
+
+
+#K14128
+joined2<-joined2%>%mutate(K14128=ifelse(K14128.x=="1" & K14128.y=="1","1",ifelse(K14128.x=="0" & K14128.y=="1","1*",ifelse(K14128.x=="1" & K14128.y=="0","1","0"))))
+joined2$K14128.x<-NULL
+joined2$K14128.y<-NULL
+
+
+#order the genes-
+joined2<-joined2%>%select(file_name,classification,completeness,contamination,gc,N50,size,K14086,K14087,K14088,K14089,K14090,K14091,K00440,K00441,K00443,K03388,K03389,K03390,K14068,K14069,K14070,K03617,K03614,K03615,K03616,K03613,K03612,K00125,K22516,K22480,K22481,K22482,K14127,K14126,K14128)
+
+write.csv(joined2,file="methanogenesis_hydrogenases.csv")
+
+#sum the genes of hydrogenases-
+joined3<-joined2
+colstoremove<-c("file_name","classification","completeness","contamination","gc","N50","size")
+colstokeep<-c("K14086","K14087","K14088","K14089","K14090","K14091","K00440","K00441","K00443","K03388","K03389","K03390","K14068","K14069","K14070","K03617","K03614","K03615", "K03616", "K03613", "K03612","K00125","K22516","K22480","K22481","K22482","K14127","K14126","K14128")
+
+joined3[colstokeep] <- lapply(joined3[colstokeep], function(y) gsub("\\*", "", y))
+
+joined3$echABCDEF<-as.numeric(joined3$K14086)+as.numeric(joined3$K14087)+as.numeric(joined3$K14088)+as.numeric(joined3$K14089)+as.numeric(joined3$K14090)+as.numeric(joined3$K14091)
+
+joined3$frhABC<-as.numeric(joined3$K00440)+as.numeric(joined3$K00441)+as.numeric(joined3$K00443)
+
+joined3$hdrA2B2C2<-as.numeric(joined3$K03388)+as.numeric(joined3$K03389)+as.numeric(joined3$K03390)
+
+joined3$vhtACG<-as.numeric(joined3$K14068)+as.numeric(joined3$K14069)+as.numeric(joined3$K14070)
+
+joined3$rnfABCDEG<-as.numeric(joined3$K03617)+as.numeric(joined3$K03614)+as.numeric(joined3$K03615)+as.numeric(joined3$K03616)+as.numeric(joined3$K03613)+as.numeric(joined3$K03612)
+
+joined3$fdhAB<-as.numeric(joined3$K00125)+as.numeric(joined3$K22516)
+
+joined3$hdrA1B1C1<-as.numeric(joined3$K22480)+as.numeric(joined3$K22481)+as.numeric(joined3$K22482)
+
+joined3$mvhAGD<-as.numeric(joined3$K14127)+as.numeric(joined3$K14126)+as.numeric(joined3$K14128)
+
+joined3<-joined3%>%select(file_name,frhABC,hdrA2B2C2, vhtACG, rnfABCDEG,echABCDEF,fdhAB,hdrA1B1C1,mvhAGD)
+
+#convert sum to 0-1 scale-
+joined3<-joined3%>%mutate(frhABC_2=ifelse(frhABC==3,1,ifelse(frhABC>0 & frhABC<3,0.5,0)))
+joined3<-joined3%>%mutate(hdrA2B2C2_2=ifelse(hdrA2B2C2==3,1,ifelse(hdrA2B2C2>0 & hdrA2B2C2<3,0.5,0)))
+joined3<-joined3%>%mutate(vhtACG_2=ifelse(vhtACG==3,1,ifelse(vhtACG>0 & vhtACG<3,0.5,0)))
+joined3<-joined3%>%mutate(rnfABCDEG_2=ifelse(rnfABCDEG==6,1,ifelse(rnfABCDEG>0 & rnfABCDEG<6,0.5,0)))
+joined3<-joined3%>%mutate(echABCDEF_2=ifelse(echABCDEF==6,1,ifelse(echABCDEF>0 & echABCDEF<6,0.5,0)))
+joined3<-joined3%>%mutate(fdhAB_2=ifelse(fdhAB==2,1,ifelse(fdhAB>0 & fdhAB<2,0.5,0)))
+joined3<-joined3%>%mutate(hdrA1B1C1_2=ifelse(hdrA1B1C1==3,1,ifelse(hdrA1B1C1>0 & hdrA1B1C1<3,0.5,0)))
+joined3<-joined3%>%mutate(mvhAGD_2=ifelse(mvhAGD==3,1,ifelse(mvhAGD>0 & mvhAGD<3,0.5,0)))
+
+#merge with methanogenesis-
+methano_all<-merge(methano3,joined3,by.x="BinID",by.y="file_name",all.x=TRUE)
+
+write.csv(methano_all,file="methanogenesis_summedbygenes_hydrogenases_march2021.csv")
+#this table is used in Figure6b
+```

@@ -1,0 +1,1166 @@
+---
+title: "paper_figures.Rmd"
+author: "Jigyasa_Arora"
+date: "3/5/2021"
+---
+
+```{r}
+library(dplyr)
+library(ape)
+library(tidyr)
+library(data.table)
+library(stringr)
+```
+
+##itol color strips-
+```{r}
+tree<-read.tree("basicstats/rna12-16S_concensus_may2020_newnames.nwk")
+sampleinfo<-read.csv("taxonomy/sample_names_ids_withotherfactors_tomedit.2.csv")
+sampleinfo<-sampleinfo%>%select(termite_tree_labels,diet_type_number4)
+
+#black-white scale for diet-
+diet_color1<-read.csv("figures/diet_itolcolors.csv",header=FALSE)
+diet_color1<-merge(diet_color1,sampleinfo,by.x="V1",by.y="termite_tree_labels")
+
+diet_color1%>%select(V2,diet_type_number4)%>%group_by(V2,diet_type_number4)%>%count()
+
+#new colors for diet-  
+diet_color1<-diet_color1%>%mutate(newcolor=ifelse(diet_type_number4=="1","#800066",ifelse(diet_type_number4=="2","#84a5c7",ifelse(diet_type_number4=="3","#E79498","#104f2a"))))
+
+diet_color1%>%select(newcolor,diet_type_number4)%>%group_by(newcolor,diet_type_number4)%>%count()
+
+diet_color2<-diet_color1%>%select(V1,newcolor)
+diet_color2<-diet_color2[match(tree$tip.label,diet_color2$V1), ]
+write.csv(diet_color2,file="figures/diet_itolcolors2.csv")
+
+#----------------------------------------------------------------------------------------------------
+##lineage colors for termite lineages in itol-
+
+lineage_colors<-read.csv("figures/lineage_itolcolors.csv",header=FALSE)
+lineage_colors$samples<-gsub("-.*$","",lineage_colors$V1)
+lineage_colors$samples<-gsub("_","-",lineage_colors$samples)
+
+lineage<-read.csv("figures/termitelineages.csv")
+
+lineage2<-merge(lineage,lineage_colors,by="samples")
+lineage2%>%select(Termite.lineages,V2)%>%group_by(Termite.lineages,V2)%>%count()
+write.csv(lineage2,file="figures/lineage_itolcolors2.csv")
+#------------------------------------------------------------------------------------------------------
+#completeness and contamination scale for MAGs-
+magtree<-read.tree("basicstats/mybins_655_fullnamestree.nwk")
+d<-data.frame(label=magtree$tip.label)
+d$Bin.IDs<-gsub("_.*$","",d$label)
+
+maginfo<-read.csv("basicstats/maginfo_655bins_march2021.csv")
+maginfo2<-maginfo%>%select(Bin.IDs,Completeness,Contamination)
+
+completeness_contamination<-merge(d,maginfo2,by="Bin.IDs")
+completeness_contamination<-completeness_contamination[match(magtree$tip.label,completeness_contamination$label), ]
+
+completeness<-completeness_contamination%>%select(-c(Contamination))
+write.csv(completeness,file="figures/mag_completeness.csv")
+
+contamination<-completeness_contamination%>%select(-c(Completeness))
+write.csv(contamination,file="figures/mag_contamination.csv")
+
+#----------------------------------------------------------------------------------------------------
+#get the MAG tree in correct format for plotting-
+magtree<-read.tree("basicstats/mybins_659_tree.nwk")
+
+maginfo<-read.csv("basicstats/maginfo_654bins_march2021.csv")
+
+maginfo<-maginfo%>%select(Bin.IDs,Termite.family,Termite.subfamily,Phyla,Class,Order,Family,Genus)
+maginfo$fullnames<-paste(maginfo$Bin.IDs,maginfo$Termite.family,maginfo$Termite.subfamily,maginfo$Phyla,maginfo$Class,maginfo$Order,maginfo$Family,maginfo$Genus,sep="_")
+
+#get 655 sequences out-
+magtree2<-keep.tip(magtree,as.vector(maginfo$Bin.IDs))
+d<-data.frame(label=magtree2$tip.label)
+
+d2<-merge(d,maginfo,by.x="label",by.y="Bin.IDs")
+#rename the tree-
+library(treeio)
+magtree2_rename = rename_taxa(magtree2, d2, label, fullnames)
+write.tree(magtree2_rename,file="basicstats/mybins_654_fullnamestree.nwk")
+
+magtree2_rename<-read.tree("basicstats/mybins_654_fullnamestree.nwk")
+d<-data.frame(label=magtree2_rename$tip.label)
+write.csv(d,file="basicstats/mybins_654_fullnamestree.order.csv")
+#----------------------------------------------------------------------------------------------------------
+#branch colors and phyla legend for MAGs-
+#colors used for microbial taxa-based on https://github.com/katiejolly/nationalparkcolors/blob/master/R/colors.R
+##BASED ON MAG TREE JAN2021-
+colors<-c(Archaea="#F6955E",Acidobacteriota="#2c5aa0", Actinobacteriota="#00aa88",Bacteroidota="#7c916f", Campylobacterota="#EC8FA3", Deferribacterota="#8C9D57",Elusimicrobiota="#4E5462", Firmicutes="#502d16",Fusobacteriota="#80792B",Myxococcota="#B23539",Planctomycetota="#008033",Proteobacteria="#916f7c",Fibrobacterota="#E79498",Spirochaetota="#d4aa00",Verrucomicrobiota="#d45500",Desulfobacterota="#A1045A")%>%as.data.frame()
+colnames(colors)<-c("colors")
+colors$phyla<-rownames(colors)
+
+magtree<-read.tree("basicstats/mybins_654_fullnamestree.nwk")
+d<-data.frame(label=magtree$tip.label)
+d$taxa1<-unlist(lapply(strsplit(as.character(d$label),split="_"),"[",8))
+d$taxa2<-unlist(lapply(strsplit(as.character(d$label),split="_"),"[",7))
+d$taxa3<-unlist(lapply(strsplit(as.character(d$label),split="_"),"[",6))
+d$taxa4<-unlist(lapply(strsplit(as.character(d$label),split="_"),"[",5))
+d$taxa5<-unlist(lapply(strsplit(as.character(d$label),split="_"),"[",4))
+d%>%select(taxa5)%>%group_by(taxa5)%>%count()
+
+d<-d%>%mutate(phyla=ifelse(taxa5=="Firmicutes" | taxa5=="FirmicutesA" | taxa5=="FirmicutesB" | taxa5=="FirmicutesC", "Firmicutes", ifelse(taxa5=="Halobacteriota" | taxa5=="Methanobacteriota" | taxa5=="Thermoplasmatota"| taxa5=="Thermoproteota", "Archaea",as.character(taxa5))))
+d%>%select(phyla)%>%group_by(phyla)%>%count()
+
+d2<-merge(d,colors,by="phyla")
+d2%>%select(phyla)%>%group_by(phyla)%>%count()
+
+d2$branch<-rep("branch",times=nrow(d2))
+d2$normal<-rep("normal",times=nrow(d2))
+
+branchcolors<-d2%>%select(label,branch,colors,normal)
+branchcolors<-branchcolors[match(magtree$tip.label,branchcolors$label), ]
+write.csv(branchcolors,file="figures/magbranch_itolcolors.csv")
+```
+
+##Figure S2- + final figure in "taxonomy_march2021.Rmd" as 16S and marker-gene were plotted separately
+```{r}
+#stacked box plot of marker gene taxonomy vs 16S-
+
+library(tidyr)
+taxa<-read.csv("taxonomy_16S_markers_others_clr_ordered.csv")
+
+tree<-read.tree("basicstats/rna12-16S_concensus_may2020_newnames.nwk")
+tree2<-keep.tip(tree,as.vector(taxa$X))
+
+taxa_long<-gather(taxa, taxonomy, clr, -c(X), factor_key=TRUE)
+taxa_long$method<-unlist(lapply(strsplit(as.character(taxa_long$taxonomy),split="_"),"[",1))
+
+taxa_long$phyla<-gsub("_c__.*$","",taxa_long$taxonomy)
+taxa_long$phyla<-gsub("markers_","",taxa_long$phyla)
+taxa_long$phyla<-gsub("s16_","",taxa_long$phyla)
+taxa_long$phyla<-gsub("d__Bacteria_p__","",taxa_long$phyla)
+taxa_long$phyla<-gsub("d__Archaea_p__","",taxa_long$phyla)
+
+#taxa_long$family<-gsub("^.*_", "", taxa_long$taxonomy) #get the last element from the string.
+
+#add sample info-
+sampleinfo<-read.csv("taxonomy/sample_names_ids_withotherfactors_tomedit.2.csv")
+
+taxa_long_info<-merge(taxa_long,sampleinfo,by.x="X",by.y="termite_tree_labels")
+taxa_long_info2<-taxa_long_info%>%dplyr::filter(clr>0)
+
+
+#get the main phyla present-
+phylagroups<-taxa_long_info2%>%dplyr::select(phyla)%>%dplyr::group_by(phyla)%>%dplyr::count()%>%dplyr::arrange(desc(n))
+
+#keeping top 20 microbial phyla for plotting-
+phylagroups2<-phylagroups%>%dplyr::filter(n>40)
+
+taxa_long_info3<-taxa_long_info2%>%dplyr::filter(phyla %in% phylagroups2$phyla)
+#--------------------------------------
+##plot1-
+library(ggplot2)
+
+#colors used for microbial taxa-based on https://github.com/katiejolly/nationalparkcolors/blob/master/R/colors.R
+##BASED ON MAG TREE JAN2021-
+colors<-c(Euryarchaeota="#F6955E",Acidobacteriota="#2c5aa0", Actinobacteriota="#00aa88",Bacteroidota="#7c916f", Campylobacterota="#EC8FA3", Deferribacterota="#8C9D57",Elusimicrobiota="#4E5462", Firmicutes="#502d16",Fusobacteriota="#80792B",Myxococcota="#B23539",Planctomycetota="#008033",Proteobacteria="#916f7c",Fibrobacterota="#2E8289",Spirochaetota="#d4aa00",Verrucomicrobiota="#548F01",Desulfobacterota="#A1045A",Gemmatimonadota="#40663F",Halobacteriota="#A4BED5",Thermoplasmatota="#CD5733",Patescibacteria="#359F8B",Synergistota="#802729",Chloroflexota="#EEEAA0",Cloacimonadota="#8D7F99",Cyanobacteria="#163343",Firmicutes_A="#A49A69",Firmicutes_B="#73652D",Firmicutes_C="#B4674E",Methanobacteriota="#FED789")
+
+dietnames<-c("1"="lower termites (LT)","2"="wood-feeding higher termites (WF)","3"="soil feeding termites (SF)","5"="fungal-cultivating termites (FC)")
+
+#overall theme-
+library(ggplot2)
+addline_format <- function(x,...){
+    gsub('\\s','\n',x)
+}
+
+theme_set(theme_minimal() + theme(legend.position = "right", axis.title =  element_text(size = 20), axis.text =  element_text(size = 15), strip.text = element_text(size = 20)))
+
+
+p<-taxa_long_info3%>%dplyr::filter(method=="s16")%>%ggplot( aes(fill=phyla, y=clr, x=as.factor(diet_type_number4))) + geom_bar(stat="identity",position="fill",alpha=1)+scale_fill_manual(values=colors,na.value="black")+scale_x_discrete(labels=addline_format(dietnames))+labs(y="Relative abundance of microbial phyla",x="Termite diet",title="16S")+theme(plot.title = element_text(hjust = 0.5))
+
+q<-taxa_long_info3%>%dplyr::filter(method=="markers")%>%dplyr::filter(!phyla=="Tenericutes")%>%ggplot( aes(fill=phyla, y=clr, x=as.factor(diet_type_number4))) + geom_bar(stat="identity",position="fill",alpha=1)+scale_fill_manual(values=colors,na.value="black")+scale_x_discrete(labels=addline_format(dietnames))+labs(y="Relative abundance of microbial phyla",x="Termite diet", title="Marker genes")+theme(plot.title = element_text(hjust = 0.5))
+
+library(ggpubr)
+figure <- ggarrange(p, q,
+                    labels = c("A", "B"),
+                    ncol = 2, nrow = 1,
+                    common.legend = TRUE, legend = "right")
+
+library(svglite)
+ggsave(file="16S_markers_taxonomy_march2021.pdf",plot=figure,height=20,width=20,dpi=800,units="in")
+
+
+
+#library(svglite)
+#ggsave(file="16S_markers_taxonomy_march2021.svg", plot=figure, width=20, height=20,dpi=800,units="in")
+
+png("16S_markers_taxonomy_march2021.png", width = 900, units="px")
+figure
+dev.off()
+
+```
+
+
+##Figure 1-
+```{r}
+taxonomy_ver2_spread2<-read.csv("metagenome-taxonomy-1000bps-bymarkersspread-rawTPM-march2021.csv",row.names=1)
+taxonomy_ver2_spread2$samples<-NULL
+taxonomy_ver2_spread2[is.na(taxonomy_ver2_spread2)] <-0
+
+#get logTPM-
+cols<-colnames(taxonomy_ver2_spread2)
+cols<-cols[-324]
+setDT(taxonomy_ver2_spread2)
+taxonomy_log<-taxonomy_ver2_spread2[, lapply(.SD, function(x) log10(x+1)), by = label, .SDcols = cols]
+taxonomy_log<-as.data.frame(taxonomy_log)
+rownames(taxonomy_log)<-taxonomy_log$label
+
+#remove taxa that are classified at phyla level only-
+taxa_cols<-colnames(taxonomy_log)%>%as.data.frame()
+colnames(taxa_cols)<-c("columns")
+library(stringr)
+taxa_cols<-taxa_cols%>%mutate(taxa_categories=ifelse(str_detect(columns, "_c__"),"classlevel","phylalevel" ))
+taxa_cols2<-taxa_cols%>%filter(taxa_categories=="classlevel")
+
+taxonomy_log2<-taxonomy_log%>%select(taxa_cols2$columns)
+
+#get taxa present in >14% of samples- (19/129). To extract top 50 taxa
+above14perc_function<-function(filename){
+filename$X<-NULL 
+filename$label<-NULL 
+
+filename2<-filename #for filtering
+filename2[filename2 > 0] <- 1 
+filename2[filename2 <= 0] <-0
+filename_10perc<-filename2[colSums(filename2) >19] 
+columns<-colnames(filename_10perc) 
+
+filename3<-filename%>%dplyr::select(columns)
+return(filename3)
+}
+
+taxonomy_log_above14perc<-above14perc_function(taxonomy_log2)
+
+#get samples with >5 taxa-
+morethan5taxa_functions<-function(filename){
+#rownames(filename)<-filename$labels
+filename$labels<-NULL
+filename$label<-NULL
+#filename$samplename<-NULL
+filename2<-filename
+filename2[filename2 > 0] <- 1
+filename2[filename2 <= 0] <-0
+filename_threeabove<-filename2[rowSums(filename2[,])>=5, ]
+rows<-rownames(filename_threeabove)
+
+filename3<-subset(filename, rownames(filename) %in% rows)
+
+return(filename3)
+}
+
+taxonomy_log_above14perc_top5<-morethan5taxa_functions(taxonomy_log_above14perc)
+taxonomy_log_above14perc_top5$labels<-rownames(taxonomy_log_above14perc_top5)
+
+
+write.csv(taxonomy_log_above14perc_top5,file="taxonomy_126samples_logtpm_march2021.csv")
+
+#----------------------------------------------------
+##adding all the archaeal taxonomy-
+
+#get archaea from the original dataset-
+taxonomy_ver2_spread2<-read.csv("metagenome-taxonomy-1000bps-bymarkersspread-rawTPM-march2021.csv",row.names=1)
+taxonomy_ver2_spread2$samples<-NULL
+taxonomy_ver2_spread2[is.na(taxonomy_ver2_spread2)] <-0
+
+#extract archaeal columns-
+taxa_cols<-colnames(taxonomy_ver2_spread2)%>%as.data.frame()
+colnames(taxa_cols)<-c("columns")
+library(stringr)
+
+taxa_cols<-taxa_cols%>%mutate(domains=ifelse(str_detect(columns, "d__Archaea"),"archaea","bacteria"))
+taxa_cols2<-taxa_cols%>%filter(domains=="archaea")
+
+#getting the archaeal columns-
+taxonomy_archaea<-taxonomy_ver2_spread2%>%select(taxa_cols2$columns)
+taxonomy_archaea$labels<-rownames(taxonomy_archaea)
+
+#spread the data-
+library(tidyr)
+taxonomy_archaea_long<-gather(taxonomy_archaea, taxa, TPM, -c(labels), factor_key=TRUE)
+
+#sum the archaeal columns at order level classification-
+taxonomy_archaea_long$orderlevel<-gsub("_f__.*$","",taxonomy_archaea_long$taxa)
+
+library(data.table)
+setDT(taxonomy_archaea_long)
+taxonomy_archaea_order<-taxonomy_archaea_long[, .(prokTPM = sum(TPM)), by = .(labels,orderlevel)]
+
+taxonomy_archaea_order_spread<-as.data.frame(spread(taxonomy_archaea_order,orderlevel,prokTPM))
+rownames(taxonomy_archaea_order_spread)<-taxonomy_archaea_order_spread$labels
+
+#get top5-7 archaeal orders-
+aboveperc_function<-function(filename){
+filename$X<-NULL 
+filename$labels<-NULL 
+
+filename2<-filename #for filtering
+filename2[filename2 > 0] <- 1 
+filename2[filename2 <= 0] <-0
+filename_10perc<-filename2[colSums(filename2) >4] 
+columns<-colnames(filename_10perc) 
+
+filename3<-filename%>%dplyr::select(columns)
+return(filename3)
+}
+
+taxonomy_archaea_order_spread_above<-aboveperc_function(taxonomy_archaea_order_spread) #present in more than 4 termite samples.
+taxonomy_archaea_order_spread_above$labels<-rownames(taxonomy_archaea_order_spread_above)
+
+#get logTPM-
+cols<-colnames(taxonomy_archaea_order_spread_above)
+cols<-cols[-7]
+setDT(taxonomy_archaea_order_spread_above)
+taxonomy_archaea_log<-taxonomy_archaea_order_spread_above[, lapply(.SD, function(x) log10(x+1)), by = labels, .SDcols = cols]
+taxonomy_archaea_log<-as.data.frame(taxonomy_archaea_log)
+rownames(taxonomy_archaea_log)<-taxonomy_archaea_log$label
+
+
+
+#joining with the original dataset to get the final file-
+taxonomy_log_above14perc_top5<-read.csv("taxonomy_126samples_logtpm_march2021.csv")
+taxonomy_final<-merge(taxonomy_log_above14perc_top5,taxonomy_archaea_log,by.x="X",by.y="labels")
+rownames(taxonomy_final)<-taxonomy_final$X
+
+
+#sort by the tree-
+tree<-read.tree("1000bps_taxonomy_129taxa_tree.nwk")
+newtree<-keep.tip(tree,as.vector(taxonomy_final$X))
+write.tree(newtree,file="1000bps_taxonomy_figure1_tree.nwk")
+
+taxonomy_final<-taxonomy_final[match(newtree$tip.label,taxonomy_final$X), ]
+
+write.csv(taxonomy_final,file="taxonomy_logtpm_figure1.csv")
+#--------------------------------------------------------------------------------------------------------
+#getting the genes + Moran's I-
+taxonomy_final<-read.csv("taxonomy_logtpm_figure1.csv")
+genescolumns<-colnames(taxonomy_final)%>%as.data.frame()
+colnames(genescolumns)<-c("names")
+
+morani<-read.csv("phylogenetic_autocorrelation_taxonomy_123columns_129samples_march2021.csv")
+#significance-
+morani<-morani%>%mutate(finalsig=ifelse(padjusted_lambda<0.05 & padjusted_lambda>0.01,"*",ifelse(padjusted_lambda<0.01 & padjusted_lambda>0.001,"**",ifelse(padjusted_lambda<0.001,"***","notsig"))))
+
+
+genescolumns_morani<-merge(genescolumns,morani,by.x="names",by.y="functions",all.x=TRUE)
+genescolumns_morani[is.na(genescolumns_morani)] <-0
+
+genescolumns_morani2<-genescolumns_morani%>%filter(finalsig !="notsig")%>%select(names,finalsig)
+write.csv(genescolumns_morani2,file="taxonomy_moranivalues.csv")
+
+
+
+```
+
+##Figure 2-
+```{r} 
+#CAZYmes relative abundance-
+above1000_tpm_cazymes<-read.csv("new/cazymes_360columns_129samples_rawTPM_april2021.csv",row.names = 1)
+above1000_tpm_cazymes$X<-rownames(above1000_tpm_cazymes)
+
+#removing zero contaning rows and columns-
+above1000_tpm_cazymes_long<-gather(above1000_tpm_cazymes, cazymes, TPM, -c(X), factor_key=TRUE)
+above1000_tpm_cazymes_long<-above1000_tpm_cazymes_long%>%filter(TPM>0)
+
+#spread the data back with no zero values-
+above1000_tpm_cazymes_nozero<- above1000_tpm_cazymes_long %>% spread(cazymes,TPM)
+rownames(above1000_tpm_cazymes_nozero)<-above1000_tpm_cazymes_nozero$X
+
+#get GHs only-
+above1000_tpm_cazymes_nozero<-select(above1000_tpm_cazymes_nozero,contains("GH")) #extract GHs only
+
+#get top 50 GHs out- (70/205)
+above50perc_function<-function(filename){
+filename[is.na(filename)] <-0
+filename2<-filename #for filtering
+filename2[filename2 > 0] <- 1 
+filename2[filename2 <= 0] <-0
+filename_10perc<-filename2[colSums(filename2) > 70] 
+columns<-colnames(filename_10perc) 
+
+filename3<-filename%>%dplyr::select(columns)
+return(filename3)
+}
+
+above1000_tpm_cazymes_nozero_top50<-above50perc_function(above1000_tpm_cazymes_nozero)
+
+#get samples with >5 GHs present-
+morethan5taxa_functions<-function(filename){
+#rownames(filename)<-filename$labels
+filename[is.na(filename)] <-0
+filename$labels<-NULL
+#filename$samplename<-NULL
+filename2<-filename
+filename2[filename2 > 0] <- 1
+filename2[filename2 <= 0] <-0
+filename_threeabove<-filename2[rowSums(filename2[,])>=5, ]
+filename_threeabove<-as.data.frame(filename_threeabove)
+rows<-rownames(filename_threeabove)
+
+filename3<-subset(filename, rownames(filename) %in% rows)
+
+return(filename3)
+}
+
+above1000_tpm_cazymes_nozero_top50_morethan5<-morethan5taxa_functions(above1000_tpm_cazymes_nozero_top50)
+above1000_tpm_cazymes_nozero_top50_morethan5$X<-rownames(above1000_tpm_cazymes_nozero_top50_morethan5)
+
+#sort by the tree-
+tree<-read.tree("basicstats/rna12-16S_concensus_may2020_newnames.nwk")
+tips<-as.vector(rownames(above1000_tpm_cazymes_nozero_top50_morethan5))
+newtree<-keep.tip(tree,tips)
+write.tree(newtree,file="1000bps_cazymes_figure2_tree.nwk")
+
+above1000_tpm_cazymes_nozero_top50_morethan5<-above1000_tpm_cazymes_nozero_top50_morethan5[match(newtree$tip.label,rownames(above1000_tpm_cazymes_nozero_top50_morethan5)), ]
+
+
+#get log TPM-
+above1000_tpm_cazymes_nozero_top50_morethan5$X<-rownames(above1000_tpm_cazymes_nozero_top50_morethan5)
+cols<-colnames(above1000_tpm_cazymes_nozero_top50_morethan5)
+cols<-cols[-51]
+setDT(above1000_tpm_cazymes_nozero_top50_morethan5)
+cazymes_log<-as.data.frame(above1000_tpm_cazymes_nozero_top50_morethan5[, lapply(.SD, function(x) log10(x+1)), by = X, .SDcols = cols])
+rownames(cazymes_log)<-cazymes_log$X
+
+write.csv(cazymes_log,file="new/cazymes_logtpm_figure2.csv")
+
+#------------------------------------------------------------------------------------------------
+#get the GH family function-
+morani<-read.csv("C:/Users/jigyasa-arora.OIST/Documents/phylogenetic_autocorrelation_cazymes_211columns_129samples_april2021_2.csv")
+
+cazymes_log<-read.csv("cazymes_logtpm_figure2.csv")
+
+top50gh<-colnames(cazymes_log)%>%as.data.frame()
+colnames(top50gh)<-c("names")
+top50gh$names<-gsub(".hmm","",top50gh$names)
+
+top50gh_morani<-merge(top50gh,morani,by.x="names",by.y="functions",all.x=TRUE)
+
+top50gh_morani<-top50gh_morani%>%mutate(finalsig=ifelse(padjusted_lambda<0.05 & padjusted_lambda>0.01,"*",ifelse(padjusted_lambda<0.01 & padjusted_lambda>0.001,"**",ifelse(padjusted_lambda<0.001,"***","notsig"))))
+
+write.csv(top50gh_morani,file="april2_kofam30evalue_functions_data/top50gh_morani.csv")
+
+```
+
+
+##Figure 4-
+```{r} 
+#get methanogenesis raw TPM-
+functions<-read.csv("april2_functions_data/archaea_metabolicgenes-rawtpm_129samples.csv",row.names=1) 
+functions<-functions%>%select(mcr)
+functions$X<-rownames(functions)
+
+#select other metabolic genes raw TPM-
+functions2<-read.csv("april2_functions_data/metabolic_pathways_rawtpm_april2021.csv")
+rownames(functions2)<-functions2$X
+
+#sum dsrAB raw TPM-
+#dsrAB<-c("K11180","K11181")
+#functions2$dsr<-functions2%>%select("K11180","K11181")%>%rowSums(na.rm=TRUE)
+#functions2<-functions2%>%select(-c("K11180","K11181"))
+
+
+#all metabolic genes together-
+allmetabolicfuncs<-merge(functions2,functions,by="X")
+write.csv(allmetabolicfuncs,file="april2_functions_data/allmetabolicfunctions_mcr_rawTPM_april2021.csv")
+#-------------------------------------------------------------------------
+
+#get samples with >5 genes present-
+morethan5taxa_functions<-function(filename){
+rownames(filename)<-filename$X
+filename[is.na(filename)] <-0
+filename$X<-NULL
+#filename$samplename<-NULL
+filename2<-filename
+filename2[filename2 > 0] <- 1
+filename2[filename2 <= 0] <-0
+filename_threeabove<-filename2[rowSums(filename2[,])>=5, ]
+filename_threeabove<-as.data.frame(filename_threeabove)
+rows<-rownames(filename_threeabove)
+
+filename3<-subset(filename, rownames(filename) %in% rows)
+
+return(filename3)
+}
+
+
+allmetabolicfuncs_above5<-morethan5taxa_functions(allmetabolicfuncs)
+allmetabolicfuncs_above5$X<-rownames(allmetabolicfuncs_above5)
+
+
+#get functions present in >5 samples-
+above5_function<-function(filename){
+  filename$label<-NULL
+  filename$samplename<-NULL
+  filename$X<-NULL
+  filename2<-filename #for filtering
+  filename2[filename2 > 0] <- 1
+  filename2[filename2 <= 0] <-0
+  filename_10perc<-filename2[colSums(filename2) >=5]
+  columns<-colnames(filename_10perc)
+
+  filename3<-filename%>%dplyr::select(columns)
+  return(filename3)
+}
+
+allmetabolicfuncs_above5_above5<-above5_function(allmetabolicfuncs_above5)
+allmetabolicfuncs_above5_above5$X<-rownames(allmetabolicfuncs_above5_above5)
+
+#sort by the tree-
+tree<-read.tree("1000bps_taxonomy_129taxa_tree.nwk")
+tips<-as.vector(allmetabolicfuncs_above5_above5$X)
+newtree<-keep.tip(tree,tips)
+write.tree(newtree,file="april2_functions_data/1000bps_metabolicgenes_figure4_tree.nwk")
+
+
+#covert the TPM to logTPM-
+cols<-colnames(allmetabolicfuncs_above5_above5)
+cols<-cols[-16]
+setDT(allmetabolicfuncs_above5_above5)
+metabolicfuncs_log<-allmetabolicfuncs_above5_above5[, lapply(.SD, function(x) log10(x+1)), by = X, .SDcols = cols]
+metabolicfuncs_log<-as.data.frame(metabolicfuncs_log)
+rownames(metabolicfuncs_log)<-metabolicfuncs_log$X
+
+metabolicfuncs_log<-metabolicfuncs_log[match(newtree$tip.label,rownames(metabolicfuncs_log)), ]
+
+#order the table by pathways-
+genenames<-read.csv("functions/all_koids_metabolicgenes_nosubunits_jan2021.csv",header=FALSE)
+genenames$V1[!(genenames$V1) %in% colnames(metabolicfuncs_log)] #find genes not present in df
+
+genenames<-genenames%>%filter(!V1 %in% c("K01938","K01491","K13990","dsr","nif","nap","ure","K01915","Group1", "Group2","GroupA","GroupB","GroupC","urt")) #remove the genes absent in df 
+
+metabolicfuncs_log$X<-NULL
+metabolicfuncs_log_ordered<-metabolicfuncs_log[,as.vector(genenames$V1)] #order the metagenome contigs data
+
+write.csv(metabolicfuncs_log_ordered,file="april2_functions_data/metabolicfunctions_logtpm_figure4.csv")
+
+#-----------------------------------------------------------------------------------------------
+#get the moranI-
+morani<-read.csv("C:/Users/jigyasa-arora.OIST/Documents/PH9790~1.CSV")
+
+morani<-morani%>%mutate(finalsig=ifelse(padjusted_lambda<0.05 & padjusted_lambda>0.01,"*",ifelse(padjusted_lambda<0.01 & padjusted_lambda>0.001,"**",ifelse(padjusted_lambda<0.001,"***","notsig"))))
+
+metabolicfuncs_log_ordered<-read.csv("april2_kofam30evalue_functions_data/metabolicfunctions_logtpm_figure4.csv")
+genes<-colnames(metabolicfuncs_log_ordered)%>%as.data.frame()
+colnames(genes)<-c("names")
+
+genes_morani<-merge(genes,morani,by.x="names",by.y="functions",all.x=TRUE)
+
+write.csv(genes_morani,file="april2_kofam30evalue_functions_data/metabolicgenes_morani.csv")
+
+```
+
+##Figure 5B-
+```{r}
+#clr transformed data used for statistical analysis-
+functions<-read.csv("april2_kofam30evalue_functions_data/mcr_archaea_april2021.csv")
+
+functions2<-read.csv("april2_kofam30evalue_functions_data/metabolic_pathways_clr_129samples_genesnosubunit.csv")
+#dsrAB<-c("K11180","K11181")
+#functions2$dsr<-functions2%>%select("K11180","K11181")%>%rowSums(na.rm=TRUE)
+#functions2<-functions2%>%select(-c("K11180","K11181"))
+
+metabolicpathways<-merge(functions2,functions,by="X")
+
+#remvoving ftcD gene-
+metabolicpathways<-metabolicpathways%>%select(-c("K13990"))
+
+#order the data-
+tree<-read.tree("1000bps_taxonomy_129taxa_tree.nwk")
+metabolicpathways<-metabolicpathways[match(tree$tip.label,metabolicpathways$X), ]
+
+#merge with sample info file-
+sampleinfo<-read.csv("taxonomy/sample_names_ids_withotherfactors_tomedit.2.csv")
+metabolicpathways2<-merge(metabolicpathways,sampleinfo,by.x="X",by.y="termite_tree_labels")
+
+metabolicpathways2<-metabolicpathways2%>%mutate(color=ifelse(diet_type_number4=="1","#0a0a0a",ifelse(diet_type_number4=="2","#C0C0C0",ifelse(diet_type_number4=="3","#576573","#84a5c7"))))
+
+metabolicpathways2<-metabolicpathways2%>%mutate(shape=ifelse(diet_type_number4=="1","1",ifelse(diet_type_number4=="2","2",ifelse(diet_type_number4=="3","0","3"))))
+
+metabolicpathways2<-metabolicpathways2[match(tree$tip.label,metabolicpathways2$X), ]
+
+##figure-
+rownames(metabolicpathways)<-metabolicpathways$X
+metabolicpathways$X<-NULL
+
+library(factoextra)
+res.pca <- prcomp(metabolicpathways, scale = TRUE)
+
+##PLOT-
+#wood-lower="#0a0a0a"
+#wood-higher="#C0C0C0"
+#soil="#576573"
+#fungal="#84a5c7"
+
+#method1-
+#install_github("vqv/ggbiplot")
+library(ggbiplot)
+
+theme_set(theme_minimal() + theme(legend.position = "right", axis.title =  element_text(size = 20), axis.text =  element_text(size = 15), strip.text = element_text(size = 20)))
+
+diets<-as.factor(metabolicpathways2$diet_type_number4)
+colors<-as.factor(metabolicpathways2$color)
+
+g <- ggbiplot(res.pca, choices=1:2, obs.scale = 1, var.scale = 1,varname.adjust = 2,varname.size=3) +geom_point(aes(shape = diets,stroke = 2,colour=colors), size = 5) #, color="white") 
+g01<-g+theme(aspect.ratio=1)
+#g1 <- ggbiplot(res.pca, choices=1:2, obs.scale = 1, var.scale = 1,varname.adjust = 2,varname.size=2,labels.size = 2) +geom_point(aes(shape = shape,stroke = 2,colour=factor(metabolicpathways2$diet_type_number5), size = 5)) + scale_colour_manual(values=dietcolors)
+
+library(svglite)
+ggsave(file="april2_kofam30evalue_functions_data/metabolicgenes_pca.svg", plot=g01, width=8.8, height=8,units="in")
+#-------------------------------------------------------------------------------------------
+#plot lineage-
+lineage2<-read.csv("figures/lineage_itolcolors2.csv")
+
+metabolicpathways2<-merge(metabolicpathways2,lineage2,by.x="X",by.y="V1")
+metabolicpathways2$diet_type_number5<-paste("diet",metabolicpathways2$diet_type_number4,sep="_")
+metabolicpathways2<-metabolicpathways2[match(tree$tip.label,metabolicpathways2$X), ]
+
+shape<-as.factor(metabolicpathways2$shape)
+dietcolors<-c(diet_1="#800066",diet_2="#84a5c7",diet_3="#E79498",diet_5="#104f2a")
+
+g <- ggbiplot(res.pca, choices=1:2, obs.scale = 1, var.scale = 1,varname.adjust = 2,varname.size=2,labels=metabolicpathways2$Termite.lineages,labels.size = 2) +geom_point(aes(shape = shape,stroke = 2,colour=factor(metabolicpathways2$diet_type_number5), size = 5)) + scale_colour_manual(values=dietcolors)
+
+
+
+pdf("metabolicgenes_pca.pdf", width=13, height=8.5)
+g
+dev.off()
+
+library(svglite)
+ggsave(file="metabolicgenes_pca.svg", plot=g, width=14, height=14)
+#-----------------------------------------------------------------------------------------
+##get phyloanova values-
+
+phylanova<-read.csv("C:/Users/jigyasa-arora.OIST/Documents/PH58E6~1.CSV")
+columns<-colnames(metabolicpathways)%>%as.data.frame()
+colnames(columns)<-c("genename")
+
+phylanova_genes<-merge(phylanova,columns,by="genename")
+
+#significance-
+phylanova_genes<-phylanova_genes%>%mutate(finalsig=ifelse(padjust<0.05 & padjust>0.01,"*",ifelse(padjust<0.01 & padjust>0.001,"**",ifelse(padjust<0.001,"***","notsig"))))
+write.csv(phylanova_genes,file="april2_kofam30evalue_functions_data/metabolicgenes_pca_anova.csv")
+```
+
+
+
+
+##Figure 7A-
+```{r}
+nitrogen<-read.csv("basicstats/mag_nitrogenmetabolism.csv")
+
+#extract mags with nitorgen fixation or dissimilatory pathway present-
+nitrogen$nifHDKENB<-nitrogen$nifD+nitrogen$nifK+nitrogen$nifH+nitrogen$nifE+nitrogen$nifN+nitrogen$nifB
+nitrogen$narGHI<-nitrogen$narG+nitrogen$narH+nitrogen$narI
+nitrogen$napAB<-nitrogen$napA+nitrogen$napB
+nitrogen$nirBD<-nitrogen$nirB+nitrogen$nirD
+nitrogen$nrfAH<-nitrogen$nrfA+nitrogen$nrfH
+
+nitrogen_complete<-nitrogen%>%filter(narGHI==3 &nirBD==2 | narGHI==3 & nrfAH==2 | napAB==2 & nirBD==2 | napAB==2 & nrfAH==2| nifHDKENB==6)
+
+#sum by subunits-
+nitrogen_complete$ureABC<-nitrogen_complete$UreA+nitrogen_complete$UreB+nitrogen_complete$UreC
+nitrogen_complete$gltBD<-nitrogen_complete$gltB+nitrogen_complete$gltD
+nitrogen_complete$urtABCDE<-nitrogen_complete$UrtA+nitrogen_complete$UrtB+nitrogen_complete$UrtC+nitrogen_complete$UrtD+nitrogen_complete$UrtE
+nitrogen_complete$argFGH<-nitrogen_complete$argF+nitrogen_complete$argG+nitrogen_complete$argH
+
+#convert sum to 0-1 scale-
+nitrogen_complete<-nitrogen_complete%>%mutate(nifHDKENB_2=ifelse(nifHDKENB==6,1,ifelse(nifHDKENB>0 & nifHDKENB<6,0.5,0)))
+nitrogen_complete<-nitrogen_complete%>%mutate(narGHI_2=ifelse(narGHI==3,1,ifelse(narGHI>0 & narGHI<3,0.5,0)))
+nitrogen_complete<-nitrogen_complete%>%mutate(napAB_2=ifelse(napAB==2,1,ifelse(napAB>0 & napAB<2,0.5,0)))
+nitrogen_complete<-nitrogen_complete%>%mutate(nirBD_2=ifelse(nirBD==2,1,ifelse(nirBD>0 & nirBD<2,0.5,0)))
+nitrogen_complete<-nitrogen_complete%>%mutate(nrfAH_2=ifelse(nrfAH==2,1,ifelse(nrfAH>0 & nrfAH<2,0.5,0)))
+nitrogen_complete<-nitrogen_complete%>%mutate(ureABC_2=ifelse(ureABC==3,1,ifelse(ureABC>0 & ureABC<3,0.5,0)))
+nitrogen_complete<-nitrogen_complete%>%mutate(gltBD_2=ifelse(gltBD==2,1,ifelse(gltBD>0 & gltBD<2,0.5,0)))
+nitrogen_complete<-nitrogen_complete%>%mutate(urtABCDE_2=ifelse(urtABCDE==5,1,ifelse(urtABCDE>0 & urtABCDE<5,0.5,0)))
+nitrogen_complete<-nitrogen_complete%>%mutate(argFGH_2=ifelse(argFGH==3,1,ifelse(argFGH>0 & argFGH<3,0.5,0)))
+
+nitrogen_complete2<-nitrogen_complete%>%select(BinID,nifHDKENB_2,narGHI_2,napAB_2,nirBD_2,nrfAH_2,ureABC_2,gltBD_2,glnA,AmtB,urtABCDE_2,arcC,argFGH_2)
+
+
+#match the mag tree-
+magtree<-read.tree("basicstats/mybins_654_fullnamestree.nwk")
+d<-data.frame(label=magtree$tip.label)
+d$BinID<-gsub("_.*$","",d$label)
+
+nitrogen_complete2<-merge(nitrogen_complete2,d,by="BinID")
+
+#get the new tree-
+magtree_nitrogen<-keep.tip(magtree,as.vector(nitrogen_complete2$label))
+write.tree(magtree_nitrogen,file="magtree_nitrogen_figure6a_tree.nwk")
+#order by new tree-
+nitrogen_complete2<-nitrogen_complete2[match(magtree_nitrogen$tip.label,nitrogen_complete2$label), ]
+write.csv(nitrogen_complete2,file="nitrogenmetabolism_binarytable_figure6a.csv")
+
+```
+
+
+##Figure 7B-
+```{r}
+
+##taxa of interest==order level + 2 family level classifications-
+nif<-read.csv("april2_kofam30evalue_functions_data/nifHDK_operon_5000bpscontigs_metagenomecontigs.csv")
+
+
+#sum nif genes together-
+nifgenes<-c("K02586","K02591","K02588")
+nif$nif<-nif%>%select("K02586","K02591","K02588")%>%rowSums(na.rm=TRUE)
+
+#taxa of interest-order level+2 separated family levels-
+nif$order<-gsub("_f__.*$","",nif$taxa)
+nif$family<-gsub("_g__.*$","",nif$taxa)
+nif<-nif%>%mutate(taxaofinterest=ifelse(family=="d__Bacteria_p__Bacteroidota_c__Bacteroidia_o__Bacteroidales_f__Dysgonomonadaceae","d__Bacteria_p__Bacteroidota_c__Bacteroidia_o__Bacteroidales_f__Dysgonomonadaceae",ifelse(family=="d__Bacteria_p__Bacteroidota_c__Bacteroidia_o__Bacteroidales_f__Azobacteroidaceae","d__Bacteria_p__Bacteroidota_c__Bacteroidia_o__Bacteroidales_f__Azobacteroidaceae",order)))
+
+#spread the data by samples, nif and taxaofinterest taxonomy-
+library(tidyr)
+library(data.table)
+
+setDT(nif)
+nif_taxa<-nif[, .(nif = sum(nif)), by = .(termite_tree_labels,taxaofinterest)]
+
+nif_taxa_spread<-as.data.frame(spread(nif_taxa,taxaofinterest,nif))
+rownames(nif_taxa_spread)<-nif_taxa_spread$termite_tree_labels
+
+
+#filter the data-
+#get samples with more than one taxa-
+morethan1taxa_functions<-function(filename){
+rownames(filename)<-filename$termite_tree_labels
+filename[is.na(filename)] <-0
+filename$termite_tree_labels<-NULL
+#filename$samples<-NULL
+filename2<-filename
+filename2[filename2 > 0] <- 1
+filename2[filename2 <= 0] <-0
+filename_threeabove<-filename2[rowSums(filename2[,])>=1, ]
+filename_threeabove<-as.data.frame(filename_threeabove)
+rows<-rownames(filename_threeabove)
+
+filename3<-subset(filename, rownames(filename) %in% rows)
+
+return(filename3)
+}
+
+nif_taxa_spread_above1<-morethan1taxa_functions(nif_taxa_spread)
+
+#get taxa present in more than one sample-
+above1_function<-function(filename){
+  filename$termite_tree_labels<-NULL
+  filename$samplename<-NULL
+ 
+  filename2<-filename #for filtering
+  filename2[filename2 > 0] <- 1
+  filename2[filename2 <= 0] <-0
+  filename_10perc<-filename2[colSums(filename2) >= 1]
+  columns<-colnames(filename_10perc)
+
+  filename3<-filename%>%dplyr::select(columns)
+  return(filename3)
+}
+
+nif_taxa_spread_above1_morethan1<-above1_function(nif_taxa_spread_above1)
+nif_taxa_spread_above1_morethan1$termite_tree_label<-rownames(nif_taxa_spread_above1_morethan1)
+#get logTPM-
+cols<-colnames(nif_taxa_spread_above1_morethan1)
+cols<-cols[-20]
+setDT(nif_taxa_spread_above1_morethan1)
+nif_log<-nif_taxa_spread_above1_morethan1[, lapply(.SD, function(x) log10(x+1)), by = termite_tree_label, .SDcols = cols]
+nif_log<-as.data.frame(nif_log)
+rownames(nif_log)<-nif_log$termite_tree_label
+
+
+tree<-read.tree("basicstats/rna12-16S_concensus_may2020_newnames.nwk")
+newtree<-keep.tip(tree,as.vector(nif_log$termite_tree_label))
+write.tree(newtree,file="april2_kofam30evalue_functions_data/5000bps_niftaxa_figure6b_tree.nwk")
+
+nif_log<-nif_log[match(newtree$tip.label,nif_log$termite_tree_label), ]
+
+write.csv(nif_log,file="april2_kofam30evalue_functions_data/niflogTPM_28samples_figure6b_march2021.csv")
+
+#-----------------------------------------------------------------------------------------------------
+##taxa of interest==family level
+nif<-read.csv("april2_kofam30evalue_functions_data/nifHDK_operon_5000bpscontigs_metagenomecontigs.csv")
+
+
+#sum nif genes together-
+nifgenes<-c("K02586","K02591","K02588")
+nif$nif<-nif%>%select("K02586","K02591","K02588")%>%rowSums(na.rm=TRUE)
+
+#taxa of interest-order level+2 separated family levels-
+nif$order<-gsub("_f__.*$","",nif$taxa)
+nif$family<-gsub("_g__.*$","",nif$taxa)
+#nif<-nif%>%mutate(taxaofinterest=ifelse(family=="d__Bacteria_p__Bacteroidota_c__Bacteroidia_o__Bacteroidales_f__Dysgonomonadaceae","d__Bacteria_p__Bacteroidota_c__Bacteroidia_o__Bacteroidales_f__Dysgonomonadaceae",ifelse(family=="d__Bacteria_p__Bacteroidota_c__Bacteroidia_o__Bacteroidales_f__Azobacteroidaceae","d__Bacteria_p__Bacteroidota_c__Bacteroidia_o__Bacteroidales_f__Azobacteroidaceae",order)))
+
+nif$taxaofinterest<-nif$family
+
+#spread the data by samples, nif and taxaofinterest taxonomy-
+library(tidyr)
+library(data.table)
+
+setDT(nif)
+nif_taxa<-nif[, .(nif = sum(nif)), by = .(termite_tree_labels,taxaofinterest)]
+
+nif_taxa_spread<-as.data.frame(spread(nif_taxa,taxaofinterest,nif))
+rownames(nif_taxa_spread)<-nif_taxa_spread$termite_tree_labels
+
+
+#filter the data-
+#get samples with more than one taxa-
+morethan1taxa_functions<-function(filename){
+rownames(filename)<-filename$termite_tree_labels
+filename[is.na(filename)] <-0
+filename$termite_tree_labels<-NULL
+#filename$samples<-NULL
+filename2<-filename
+filename2[filename2 > 0] <- 1
+filename2[filename2 <= 0] <-0
+filename_threeabove<-filename2[rowSums(filename2[,])>=1, ]
+filename_threeabove<-as.data.frame(filename_threeabove)
+rows<-rownames(filename_threeabove)
+
+filename3<-subset(filename, rownames(filename) %in% rows)
+
+return(filename3)
+}
+
+nif_taxa_spread_above1<-morethan1taxa_functions(nif_taxa_spread)
+
+#get taxa present in more than one sample-
+above1_function<-function(filename){
+  filename$termite_tree_labels<-NULL
+  filename$samplename<-NULL
+ 
+  filename2<-filename #for filtering
+  filename2[filename2 > 0] <- 1
+  filename2[filename2 <= 0] <-0
+  filename_10perc<-filename2[colSums(filename2) >= 1]
+  columns<-colnames(filename_10perc)
+
+  filename3<-filename%>%dplyr::select(columns)
+  return(filename3)
+}
+
+nif_taxa_spread_above1_morethan1<-above1_function(nif_taxa_spread_above1)
+nif_taxa_spread_above1_morethan1$termite_tree_label<-rownames(nif_taxa_spread_above1_morethan1)
+#get logTPM-
+cols<-colnames(nif_taxa_spread_above1_morethan1)
+cols<-cols[-24]
+setDT(nif_taxa_spread_above1_morethan1)
+nif_log<-nif_taxa_spread_above1_morethan1[, lapply(.SD, function(x) log10(x+1)), by = termite_tree_label, .SDcols = cols]
+nif_log<-as.data.frame(nif_log)
+rownames(nif_log)<-nif_log$termite_tree_label
+
+
+tree<-read.tree("basicstats/rna12-16S_concensus_may2020_newnames.nwk")
+newtree<-keep.tip(tree,as.vector(nif_log$termite_tree_label))
+write.tree(newtree,file="april2_kofam30evalue_functions_data/5000bps_niftaxa_figure6b_tree2.nwk")
+
+nif_log<-nif_log[match(newtree$tip.label,nif_log$termite_tree_label), ]
+
+write.csv(nif_log,file="april2_kofam30evalue_functions_data/niflogTPM_28samples_figure6b_march2021_2.csv")
+
+
+
+```
+
+
+##Figure 5A-
+```{r}
+cazymes<-read.csv("C:/Users/jigyasa-arora.OIST/Documents/cazymes_211columns_129samples_clr_april2021.csv") #clr transformed data!
+rownames(cazymes)<-cazymes$X
+
+#remove sample "301-52" as it is all zero-
+
+
+#extract the significant GHs only-
+phylanova<-read.csv("C:/Users/jigyasa-arora.OIST/Documents/Phylogenetic_anova_withdiet_211CAZYmes_129samples_march2021.csv",row.names = 1)
+phylanova<-phylanova%>%filter(str_detect(genename, "GH") & padjust <0.05)
+phylanova$genename<-gsub("$",".hmm",phylanova$genename)
+
+#extract the top50 from the significant GHs-
+cazymes2<-cazymes[,phylanova$genename]
+
+above50perc_function<-function(filename){
+filename[is.na(filename)] <-0
+filename2<-filename #for filtering
+filename2[filename2 > 0] <- 1 
+filename2[filename2 <= 0] <-0
+filename_10perc<-filename2[colSums(filename2) > 70] 
+columns<-colnames(filename_10perc) 
+
+filename3<-filename%>%dplyr::select(columns)
+return(filename3)
+}
+
+cazymes2_top50<-above50perc_function(cazymes2)
+cazymes2_top50$X<-rownames(cazymes2_top50)
+
+
+#merge "cazymes2_top50" file with sample info file-<for metadata>
+tree<-read.tree("1000bps_taxonomy_128taxa_tree.nwk")
+sampleinfo<-read.csv("taxonomy/sample_names_ids_withotherfactors_tomedit.2.csv")
+cazymes3<-merge(cazymes2_top50,sampleinfo,by.x="X",by.y="termite_tree_labels")
+
+cazymes3<-cazymes3%>%mutate(color=ifelse(diet_type_number4=="1","#0a0a0a",ifelse(diet_type_number4=="2","#C0C0C0",ifelse(diet_type_number4=="3","#576573","#84a5c7"))))
+
+cazymes3<-cazymes3%>%mutate(shape=ifelse(diet_type_number4=="1","21",ifelse(diet_type_number4=="2","22",ifelse(diet_type_number4=="3","24","3"))))
+
+cazymes3$lineage3<-paste(cazymes3$lineage,cazymes3$lineage2,sep="_")
+#add termite lineage color info-
+lineage2<-read.csv("figures/lineage_itolcolors2.csv")
+
+cazymes3<-merge(cazymes3,lineage2,by.x="X",by.y="V1")
+cazymes3$Termite.lineages<-gsub("-","_",cazymes3$Termite.lineages)
+cazymes3<-cazymes3[match(tree$tip.label,cazymes3$X), ] #order by tree
+
+
+#sort "cazymes" file with tree file- <all data for pca>
+tree<-read.tree("1000bps_taxonomy_128taxa_tree.nwk")
+#cazymes<-cazymes[match(tree$tip.label,cazymes$X), ] #original file ordered by tree
+cazymes2_top50<-cazymes2_top50[match(tree$tip.label,cazymes$X), ] #top50 cazymes file ordered by tree
+##figure-
+library(factoextra)
+rownames(cazymes2_top50)<-cazymes2_top50$X
+cazymes2_top50$X<-NULL
+cazymes2_top50[is.na(cazymes2_top50)] <-0
+
+res.pca <- prcomp(cazymes2_top50, scale = TRUE)
+
+##PLOT-
+#wood-lower="#0a0a0a"
+#wood-higher="#C0C0C0"
+#soil="#576573"
+#fungal="#84a5c7"
+
+#method1-color by diet
+#install_github("vqv/ggbiplot")
+library(ggbiplot)
+
+theme_set(theme_minimal() + theme(legend.position = "right", axis.title =  element_text(size = 20), axis.text =  element_text(size = 15), strip.text = element_text(size = 20)))
+
+diets<-as.factor(cazymes3$diet_type_number4)
+colors<-as.factor(cazymes3$color)
+
+#plot
+g0 <- ggbiplot(res.pca, choices=1:2, obs.scale = 1, var.scale = 1,varname.adjust = 2,varname.size=2, varname.abbrev = TRUE) +geom_point(aes(shape = diets,stroke = 2,color=colors), size = 5) #+  geom_text(res.pca$scale,)#, color="white")
+g1<-g0+theme(aspect.ratio=1) #to get the plot in a square
+
+library(svglite)
+ggsave(file="april2_kofam30evalue_functions_data/cazymes_top50_signficiant_pca.svg", plot=g1, width=8.8, height=8.8,units = "in")
+
+#method3-labels by termite lineages-
+cazymes3$diet_type_number5<-paste("diet",cazymes3$diet_type_number4,sep="_")
+dietcolors<-c(diet_1="#800066",diet_2="#84a5c7",diet_3="#E79498",diet_5="#104f2a")
+shape<-as.factor(cazymes3$shape)
+
+#g <- ggbiplot(res.pca, choices=1:2, obs.scale = 1, var.scale = 1,varname.adjust = 2,varname.size=2,labels=cazymes3$Termite.lineages,labels.size = 2) +geom_point(aes(shape = diets,stroke = 2,color=colors), size = 5) #+ scale_colour_manual(values=dietcolors)
+
+g <- ggbiplot(res.pca, choices=1:2, obs.scale = 1, var.scale = 1,varname.adjust = 2,varname.size=2,labels.size = 2) +geom_point(aes(shape = diets,stroke = 2,color=colors), size = 5)
+#---------------------------------------------------------------------------------
+#show only top50 variables in the biplot-
+# Get ggplot2 object
+#g2 <- ggplot_build(g0)
+g2 <- ggplot_build(g)
+
+# Remove unwanted arrows & labels-based on https://stackoverflow.com/questions/54929291/how-can-i-remove-arrows-from-ggbiplot-of-pca-in-r-that-are-not-significant
+colstoextract<-as.data.frame(colnames(cazymes2_top50)) #columns to extract
+colnames(colstoextract)<-c("columns")
+colstoextract$columns<-gsub("hmm","",colstoextract$columns)
+colstoextract_vector<-as.vector(colstoextract$columns)
+
+#based on the names in "g$data[[3]]$label", manually get the GH names to extract <for "g0">-
+#colstoextract_vector2<-c("GH1.","GH10.","GH103","GH105","GH106","GH115","GH116","GH127","GH13.","GH13_11","GH13_20","GH13_31","GH13_8","GH13_9","GH130","GH133","GH16","GH18","GH2.","GH20","GH23.","GH26","GH28","GH29","GH3.","GH30.","GH31","GH36","GH39","GH4.","GH42","GH43.","GH43_1.","GH43_10","GH43_12","GH43_35","GH5_2.","GH5_4.","GH51","GH53","GH57","GH67","GH73","GH77","GH78","GH8.","GH88","GH9.","GH92","GH94","GH95")
+
+##for <g0 plot>
+#g2$data[[3]] <-g2$data[[3]][g2$data[[3]]$label%in% colstoextract_vector2, ] #for the plot
+#test <-g2$data[[3]][g2$data[[3]]$label%in% colstoextract_vector2, ] #to get the rownames
+#test_rows<-as.vector(rownames(test))
+#g2$data[[1]]<-g2$data[[1]][test_rows,] #extract based on rownames
+
+cols<-colnames(cazymes2_top50)
+cols<-cols[-52]
+g2$data[[3]] <-g2$data[[3]][g2$data[[3]]$label%in% cols, ] #for the plot
+test <-g2$data[[3]][g2$data[[3]]$label%in% cols, ] #to get the rownames
+test_rows<-as.vector(rownames(test))
+g2$data[[1]]<-g2$data[[1]][test_rows,] #extract based on rownames
+
+
+# Repackage & plot-based on https://stackoverflow.com/questions/60201315/r-reliable-conversion-between-gtable-and-ggplot-objects-how-to-make-lemonrep
+#plot(ggplot_gtable(g2))
+grid.draw(ggplot_gtable(g2))
+
+
+pdf("april2_kofam30evalue_functions_data/cazymes_top50_significant_pca.pdf", width=13, height=8.5)
+grid.draw(ggplot_gtable(g2))
+dev.off()
+
+library(svglite)
+ggsave(file="april2_kofam30evalue_functions_data/cazymes_top50_signficiant_pca.svg", plot=grid.draw(ggplot_gtable(g2)), width=14, height=14)
+
+#-------------------------------------------------------------------------------
+#morani index for the Ghs plotted-
+
+cols<-colnames(cazymes2_top50)%>%as.data.frame()
+colnames(cols)<-c("columns")
+
+phylanova_extracted<-phylanova%>%filter(genename %in% cols$columns)
+
+phylanova_extracted<-phylanova_extracted%>%mutate(finalsig=ifelse(padjust<0.05 & padjust>0.01,"*",ifelse(padjust<0.01 & padjust>0.001,"**",ifelse(padjust<0.001,"***","notsig"))))
+
+write.csv(phylanova_extracted,file="april2_kofam30evalue_functions_data/top50gh_pca_anova.csv")
+
+#-------------------------------------------------------------------------------
+#method2-color by termite lineages
+library(ggbiplot)
+
+theme_set(theme_minimal() + theme(legend.position = "right", axis.title =  element_text(size = 20), axis.text =  element_text(size = 15), strip.text = element_text(size = 20)))
+
+
+shape<-as.factor(cazymes3$shape)
+
+lineagecolors<-c(Amitermes_group="#cd1076",Apicotermitinae="#228B22",Archotermopsidae_Hodotermitidae="#b8860b",Cephalotermes_group="#e9de5e",Cryptocercidae="#008b8b",Cubitermitinae="#7D26CD",Foraminitermitinae="#8B008B",Heterotermitinae_Coptotermitinae="#ff0000",Kalotermitidae="#0000FF",Macrotermitinae="#104f2a",Mastotermitidae="#232a80",Microcerotermes="#03aba4",Nasutitermitinae="#632424",Neocapritermes_group="#05544F",Pericapritermes_group="#CD1076",Promirotermes="#FF6600",Reticulitermes="#672178",Rhinotermitinae="#BF3EFF",Serritermitidae="#1fbaf2",Sphaerotermitinae="#ccff00",Stolotermitidae="#D3BC5F",Stylotermitidae="#66531e",Syntermitinae="#8B7355",Termes_group="#FFA500",Termitigetoninae_Prorhinotermitinae="#9c091d")
+
+g <- ggbiplot(res.pca, choices=1:2, obs.scale = 1, var.scale = 1,varname.adjust = 2,varname.size=2) +geom_point(aes(shape = shape,stroke = 2,colour=factor(cazymes3$Termite.lineages), size = 5)) + scale_colour_manual(values=lineagecolors)
+
+
+pdf("cazymes_top50_significant_pca_termitelineagecolors.pdf", width=13, height=8.5)
+g
+dev.off()
+
+library(svglite)
+ggsave(file="cazymes_top50_signficiant_pca_termitelineagecolors.svg", plot=g, width=14, height=14)
+
+
+#-----------------------------------------------------------------------------------------------
+#method3-labels by termite lineages-
+cazymes3$diet_type_number5<-paste("diet",cazymes3$diet_type_number4,sep="_")
+dietcolors<-c(diet_1="#800066",diet_2="#84a5c7",diet_3="#E79498",diet_5="#104f2a")
+
+g <- ggbiplot(res.pca, choices=1:2, obs.scale = 1, var.scale = 1,varname.adjust = 2,varname.size=2,labels=cazymes3$Termite.lineages,labels.size = 2) +geom_point(aes(shape = shape,stroke = 2,colour=factor(cazymes3$diet_type_number5), size = 5)) + scale_colour_manual(values=dietcolors)
+
+
+pdf("cazymes_top50_significant_pca_dietcolorslabels.pdf", width=13, height=8.5)
+g
+dev.off()
+
+library(svglite)
+ggsave(file="cazymes_top50_signficiant_pca_dietcolorslabels.svg", plot=g, width=14, height=14)
+
+
+```
+
+
+##Figure 3-
+```{r}
+#get the 20GHs and termite samples from functional_taxonomy_cazymes dataset-
+
+functions_clr<-read.csv("functional-annotation-5000abovecontigs-20GHs.csv") #created in "functional_taxonomy_cazymes_march2021.Rmd"
+tree<-read.tree("1000bps_taxonomy_110taxa_tree.nwk")
+
+functions_tpm<-read.csv("cazymes-taxonomy-allcontigs-5000bps_123samples_march2021.csv")
+
+#extract the data from raw tpm df-
+functions_tpm_20gh<-functions_tpm%>%select(colnames(functions_clr))
+functions_tpm_20gh_110samples<-functions_tpm_20gh%>%filter(X %in% functions_clr$X)
+functions_tpm_20gh_110samples[is.na(functions_tpm_20gh_110samples)] <-0
+
+#convert to logtpm-
+cols<-colnames(functions_tpm_20gh_110samples)
+cols<-cols[-1]
+setDT(functions_tpm_20gh_110samples)
+functions_gh_log<-functions_tpm_20gh_110samples[, lapply(.SD, function(x) log10(x+1)), by = X, .SDcols = cols]
+functions_gh_log<-as.data.frame(functions_gh_log)
+rownames(functions_gh_log)<-functions_gh_log$X
+
+functions_gh_log<-functions_gh_log[match(tree$tip.label,functions_gh_log$X), ]
+
+write.csv(functions_gh_log,file="functions_gh_logtpm_figure3a.csv")
+#--------------------------------------------------------------------------------------------------------
+#getting the genes + Moran's I-
+functions_gh_log<-read.csv("functions_gh_logtpm_figure3a.csv")
+genescolumns<-colnames(functions_gh_log)%>%as.data.frame()
+colnames(genescolumns)<-c("names")
+
+morani<-read.csv("Phylogenetic_anova_withdiet_functionalcazymes_110samples_march2021.csv")
+#significance-
+morani<-morani%>%mutate(finalsig=ifelse(padjust<0.05 & padjust>0.01,"*",ifelse(padjust<0.01 & padjust>0.001,"**",ifelse(padjust<0.001,"***","notsig"))))
+
+
+genescolumns_morani<-merge(genescolumns,morani,by.x="names",by.y="genename",all.x=TRUE)
+genescolumns_morani[is.na(genescolumns_morani)] <-0
+
+genescolumns_morani2<-genescolumns_morani%>%filter(finalsig !="notsig")%>%select(names,finalsig)
+write.csv(genescolumns_morani,file="functionalcazymes_anovavalues.csv")
+
+
+
+```
+
+
+##Figure 6-
+```{r}
+##FIGURE6A-
+
+reductive<-read.csv("april2_kofam30evalue_functions_data/reductiveacetogenesis_summedbygenes_march2021.csv") #newest version without ftcD, hndABCD.
+#match the mag tree-
+magtree<-read.tree("basicstats/mybins_654_fullnamestree.nwk")
+d<-data.frame(label=magtree$tip.label)
+d$Bin.IDs<-gsub("_.*$","",d$label)
+
+reductive2<-merge(reductive,d,by.x = "file_name",by.y="Bin.IDs")
+
+#get the new tree-
+magtree_reductive<-keep.tip(magtree,as.vector(reductive2$label))
+write.tree(magtree_reductive,file="april2_kofam30evalue_functions_data/magtree_reductive_figure5a_tree.nwk")
+#order by new tree-
+reductive2<-reductive2[match(magtree_reductive$tip.label,reductive2$label), ]
+write.csv(reductive2,file="april2_kofam30evalue_functions_data/reductiveacetogenesis_binarytable_figure5a.csv")
+
+#------------------------------------------------------------------------------------------------
+##FIGURE6B-
+
+methano<-read.csv("methanogenesis_summedbygenes_hydrogenases_march2021.csv")
+
+#match the mag tree-
+magtree<-read.tree("basicstats/mybins_654_fullnamestree.nwk")
+d<-data.frame(label=magtree$tip.label)
+d$BinID<-gsub("_.*$","",d$label)
+
+methano2<-merge(methano,d,by="BinID")
+
+#get the new tree-
+magtree_methano<-keep.tip(magtree,as.vector(methano2$label))
+write.tree(magtree_methano,file="magtree_methano_figure5b_tree.nwk")
+
+#order by new tree-
+methano2<-methano2[match(magtree_methano$tip.label,methano2$label), ]
+
+
+#order the genes-
+methano2<-methano2%>%select(label,mcrABG_2,mcrCD_2,cdhCDE_2,acs,ack,pta,fmdABCDEFGH_2,ftr,mch,hmd,mtd,mer,mtrABCDEFGH_2,cdhAB_2,fae.hps,mtmABC_2,mtbABC_2,mttABC_2,mtaABC_2,echABCDEF_2,frhABC_2,vhtACG_2,hdrA1B1C1_2,hdrA2B2C2_2,mvhAGD_2,fdhAB_2)
+
+write.csv(methano2,file="methanogenesis_binarytable_figure5b.csv")
+#--------------------------------------------------------------------------------------------------
+##FIGURE6C-
+
+sulfate<-read.csv("sulfatereduction_summedbygenes_march2021.csv")
+
+#match the mag tree-
+magtree<-read.tree("basicstats/mybins_654_fullnamestree.nwk")
+d<-data.frame(label=magtree$tip.label)
+d$BinID<-gsub("_.*$","",d$label)
+
+sulfate2<-merge(sulfate,d,by="BinID")
+
+#get the new tree-
+magtree_sulfate<-keep.tip(magtree,as.vector(sulfate2$label))
+write.tree(magtree_sulfate,file="magtree_sulfate_figure5c_tree.nwk")
+#order by new tree-
+sulfate2<-sulfate2[match(magtree_sulfate$tip.label,sulfate2$label), ]
+write.csv(sulfate2,file="sulfatereduction_binarytable_figure5c.csv")
+
+```
+

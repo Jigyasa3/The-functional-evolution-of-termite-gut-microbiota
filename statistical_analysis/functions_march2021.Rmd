@@ -1,0 +1,1216 @@
+---
+title: "functions"
+author: "Jigyasa_Arora"
+date: "2/28/2021"
+---
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(data.table)
+library(ape)
+```
+
+
+##extracting CAZYme families present in >10% of termite species + clr transformed-
+##NOTE-cazyme's Moran's I was tested on TPM from march version and april version, the no. of cazymes and the Moran's I significance changes, but that depends on how many genes are present in the total dataset!
+```{r}
+#above1000<-read.csv("functions/1000bps_genes.txt",row.names = 1) #all functional genes TPM
+above1000<-read.csv("april2_kofam30evalue_functions_data/1000bps_genes.txt",row.names = 1) #new version with KEGGids using "detail" flag
+above1000<-above1000%>%mutate(databases=ifelse(grepl("^K", annotation),"KEGG",ifelse(grepl(".hmm",annotation),"CAZY","PFAM")))
+
+
+above1000%>%select(databases)%>%group_by(databases)%>%count()
+#-----------------------------------------------------------
+#termite time tree
+newtree_129samples<-read.tree("1000bps_taxonomy_129taxa_tree.nwk")
+dnew2<-data.frame(label=newtree_129samples$tip.label)
+
+dnew2$label<-as.character(dnew2$label)
+dnew2$runnumber<-unlist(lapply(strsplit(dnew2$label,split="-"),"[",1))
+dnew2$runnumber<-gsub("_","-",dnew2$runnumber)
+
+#spread the data-
+library(tidyr)
+above1000$databases<-NULL
+above1000_spread<-as.data.frame(spread(above1000,annotation,TPM))
+rownames(above1000_spread)<-above1000_spread$sample_names
+
+#join the spread file with termite tree label file to get all the sample labels together-
+above1000_spread2<-merge(above1000_spread,dnew2,by.x="samples",by.y="runnumber",all.y=TRUE)
+rownames(above1000_spread2)<-above1000_spread2$label
+
+#order the rownames by termite tree to get samples with no data at this step!
+above1000_spread2<-above1000_spread2[match(newtree_129samples$tip.label,rownames(above1000_spread2)), ]
+
+
+#---------------------------------------------------------------------------
+
+#clr transform the spread data-
+
+clr_transform<-function(filename_spread2){ 
+library(propr) 
+filename_spread2[is.na(filename_spread2)] <-0 #convert NA to zero
+#rownames(filename_spread2)<-filename_spread2$label
+filename_spread2$label<-NULL
+filename_spread2$sample_names<-NULL
+filename_spread2$samples<-NULL
+filename_spread2$X<-NULL
+#add psuedo counts to account for missing and not-present data-  
+filename_spread2<-filename_spread2+0.65
+
+filename_propr<-propr(filename_spread2,metric="rho",ivar="clr")
+
+#creating a df with all the transformed pathways and metadata-
+filename_propr_df<-filename_propr@logratio
+
+return(filename_propr_df)
+}
+
+
+above1000_functions_clr<-clr_transform(above1000_spread2)
+
+##TEST for clr transformation- row sum is zero
+head(round(rowSums(above1000_functions_clr[1,])),3)
+
+write.csv(above1000_functions_clr,file="new/functions_129samples_15389columns__clrtransformed_april2021.csv")
+write.csv(above1000_spread2,file="new/functions_129samples_15389columns_rawtpm_april2021.csv")
+#-----------------------------------------------------------
+
+above1000_clr_cazymes<-above1000_functions_clr%>%dplyr::select(matches("(.hmm)")) #get CAZymes out
+above1000_tpm_cazymes<-above1000_spread2%>%dplyr::select(matches("(.hmm)")) #get CAZymes out
+write.csv(above1000_tpm_cazymes,file="new/cazymes_360columns_129samples_rawTPM_april2021.csv")
+write.csv(above1000_clr_cazymes,file="new/cazymes_360columns_129samples_clr_april2021.csv")
+#-----------------------------------------------------------------------------------------
+#-----------------------------------------------------------------------------------------
+above1000_clr_cazymes<-read.csv("new/cazymes_360columns_129samples_clr_april2021.csv",row.names = 1)
+above1000_tpm_cazymes<-read.csv("new/cazymes_360columns_129samples_rawTPM_april2021.csv",row.names=1)
+
+#previous version:from clr transformed data->re-select columns present with 7.5% prevalance (0.075*nrow())
+#select with 10% prevalance- 12.9/129
+above10perc_function<-function(filename){
+filename$label<-NULL   
+filename$samplename<-NULL   
+filename[is.na(filename)] <-0 #convert NA to zero
+filename2<-filename #for filtering 
+filename2[filename2 > 0] <- 1 
+filename2[filename2 <= 0] <-0
+filename_10perc<-filename2[colSums(filename2) >= 12.9]  
+columns<-colnames(filename_10perc) 
+
+filename3<-filename%>%dplyr::select(columns)
+return(filename3)
+}
+
+#10% of cazymes-
+cazymes_tpm_10perc<-above10perc_function(above1000_tpm_cazymes) #cazymes present in 10% of samples. 0-1 done on raw TPM as low TPMs (above 0) can have zero clr values!
+cazymescols<-colnames(cazymes_tpm_10perc)
+cazymes_clr_10perc<-above1000_clr_cazymes%>%select(cazymescols) #select the same columns as 10perc TPM.
+
+#from clr transformed data-> re-select rows with more than 3 functions -not used!
+morethan3taxa_functions<-function(filename){
+ 
+filename$label<-NULL 
+filename$samplename<-NULL
+filename2<-filename
+filename2[filename2 > 0] <- 1
+filename2[filename2 <= 0] <-0
+filename_threeabove<-filename2[rowSums(filename2[,])>=3, ]
+rows<-rownames(filename_threeabove)
+
+filename3<-subset(filename, rownames(filename) %in% rows)
+
+return(filename3)
+}
+
+
+#more than 3 taxa per functions-
+#cazymes_clr_7.5perc_3above<-morethan3taxa_functions(cazymes_clr_7.5perc)
+cazymes_tpm_10perc_3above<-morethan3taxa_functions(cazymes_tpm_10perc)
+cazymescols<-colnames(cazymes_tpm_10perc_3above)
+cazymesrows<-rownames(cazymes_tpm_10perc_3above)
+cazymes_clr_10perc_3above<-cazymes_clr_10perc%>%select(cazymescols) #select same columns as 10perc_3above TPM
+cazymes_clr_10perc_3above<-cazymes_clr_10perc_3above[rownames(cazymes_clr_10perc) %in% cazymesrows, ] #select same rows as 10perc_3above TPM
+
+
+write.csv(cazymes_clr_10perc_3above,file="new/cazymes_211columns_128samples_clr_march2021.csv") #10% samples + 3above
+newtree_129samples<-read.tree("1000bps_taxonomy_129taxa_tree.nwk")
+newtree_128samples<-keep.tip(newtree_129samples,as.vector(rownames(cazymes_clr_10perc_3above)))
+write.tree(newtree_128samples,file="1000bps_taxonomy_128taxa_tree.nwk")
+
+
+write.csv(cazymes_clr_10perc,file="new/cazymes_211columns_128samples_clr_march2021.csv") #10% samples
+newtree_129samples<-read.tree("1000bps_taxonomy_129taxa_tree.nwk")
+
+
+#which cazymes were removed in filtering-
+test1<-colnames(above1000_clr_cazymes)%>%as.data.frame()
+colnames(test1)<-c("columns")
+test2<-colnames(cazymes_clr_10perc_3above)%>%as.data.frame()
+colnames(test2)<-c("columns")
+
+notcommon<-anti_join(test1,test2,by="columns")
+
+```
+
+
+##basic stats on CAZymes-relative abundance and overall distribution-
+```{r}
+
+##overall distribution of CAZymes in 129 metagenomes -
+above1000_tpm_cazymes<-read.csv("april2_kofam30evalue_functions_data/cazymes_360columns_129samples_rawTPM_april2021.csv",row.names = 1)
+above1000_tpm_cazymes$X<-rownames(above1000_tpm_cazymes)
+
+#removing zero contaning rows and columns-
+above1000_tpm_cazymes_long<-gather(above1000_tpm_cazymes, cazymes, TPM, -c(X), factor_key=TRUE)
+above1000_tpm_cazymes_long<-above1000_tpm_cazymes_long%>%filter(TPM>0)
+
+#spread the data back with no zero values-
+above1000_tpm_cazymes_nozero<- above1000_tpm_cazymes_long %>% spread(cazymes,TPM)
+
+#extract cazymes present-
+cazymes<-as.data.frame(colnames(above1000_tpm_cazymes_nozero))
+colnames(cazymes)<-c("annotation")
+#cazymes<-cazymes%>%filter(annotation!="SLH.hmm")
+cazymes<-cazymes%>%mutate(types=ifelse(grepl("AA", annotation),"AA",ifelse(grepl("GT",annotation),"GT",ifelse(grepl("CBM",annotation),"CBM",ifelse(grepl("GH",annotation),"GH",ifelse(grepl("CE",annotation),"CE","PL"))))))
+cazymes<-cazymes%>%filter(annotation!="X")
+cazymes%>%select(types)%>%group_by(types)%>%count()
+
+#how many samples are present in rawTPM data (only removing zero columns)-
+originaldf<-as.data.frame(above1000_tpm_cazymes$X)
+colnames(originaldf)<-c("sample_names")
+
+nonzerodf<-as.data.frame(above1000_tpm_cazymes_nozero$X)
+colnames(nonzerodf)<-c("sample_names")
+
+notjoined<-anti_join(originaldf,nonzerodf,by="sample_names")
+
+print(paste0("There are " , nrow(nonzerodf), " no. of samples after removing zero values. This equals the clr transformed dataset. Sample removed is ", notjoined[1,1]))
+
+##NOTE- Sample 301-52 contains CAZymes, but they are either present in contigs shorter than 1000bps or are not microbial. This was checked manually for this sample.
+#-----------------------------------------------------------------------------
+##total no. of families per metagenomes-
+above1000_tpm_cazymes<-read.csv("april2_kofam30evalue_functions_data/cazymes_360columns_129samples_rawTPM_april2021.csv",row.names = 1)
+above1000_tpm_cazymes$X<-rownames(above1000_tpm_cazymes)
+above1000_tpm_cazymes[is.na(above1000_tpm_cazymes)] <-0
+
+#removing zero contaning rows and columns-
+above1000_tpm_cazymes_long<-gather(above1000_tpm_cazymes, cazymes, TPM, -c(X), factor_key=TRUE)
+above1000_tpm_cazymes_long<-above1000_tpm_cazymes_long%>%filter(TPM>0)
+
+above1000_tpm_cazymes_long_count<-above1000_tpm_cazymes_long%>%select(X)%>%group_by(X)%>%count()
+colnames(above1000_tpm_cazymes_long_count)<-c("X","freq")
+#write.csv(above1000_tpm_cazymes_long_count,file="cazymes_overallcountpersample_feb2021.csv") 
+
+print(paste0("minimum no.of cazymes in 129 metagenomes are ", min(above1000_tpm_cazymes_long_count$freq)))
+
+print(paste0("maximum no. of cazymes in 129 metagenomes are ", max(above1000_tpm_cazymes_long_count$freq)))
+
+#-----------------------------------------------------------------------
+#perc abundance of GH families in metagenomes-
+
+above1000_tpm_cazymes<-read.csv("cazymes_360columns_129samples_rawTPM_march2021.csv",row.names = 1)
+above1000_tpm_cazymes$X<-rownames(above1000_tpm_cazymes)
+above1000_tpm_cazymes[is.na(above1000_tpm_cazymes)] <-0
+
+#removing zero contaning rows and columns-
+above1000_tpm_cazymes_long<-gather(above1000_tpm_cazymes, cazymes, TPM, -c(X), factor_key=TRUE)
+above1000_tpm_cazymes_long<-above1000_tpm_cazymes_long%>%filter(TPM>0)
+
+#spread the data back with no zero values-
+above1000_tpm_cazymes_nozero<- above1000_tpm_cazymes_long %>% spread(cazymes,TPM)
+rownames(above1000_tpm_cazymes_nozero)<-above1000_tpm_cazymes_nozero$X
+above1000_tpm_cazymes_nozero$X<-NULL
+
+write.csv(above1000_tpm_cazymes_nozero,file="cazymes_346columns_128samples_rawTPM_march2021.csv")
+
+#convert everything to binary-
+above1000_tpm_cazymes_nozero[is.na(above1000_tpm_cazymes_nozero)] <-0 #convert NA to zero
+above1000_tpm_cazymes_nozero[above1000_tpm_cazymes_nozero > 0] <- 1 
+above1000_tpm_cazymes_nozero[above1000_tpm_cazymes_nozero <= 0] <-0
+
+#calculate distribution of cazymes-percolumn sum-
+columnsums<-colSums(above1000_tpm_cazymes_nozero)%>%as.data.frame()
+colnames(columnsums)<-c("count")
+columnsums$total<-rep(nrow(above1000_tpm_cazymes_nozero),nrow(columnsums)) #total no of termite samples.
+columnsums$perc<-columnsums$count/columnsums$total*100
+columnsums$cazymes<-rownames(columnsums)
+
+
+columnsums<-columnsums%>%mutate(types=ifelse(grepl("AA", cazymes),"AA",ifelse(grepl("GT",cazymes),"GT",ifelse(grepl("CBM",cazymes),"CBM",ifelse(grepl("GH",cazymes),"GH",ifelse(grepl("CE",cazymes),"CE","PL"))))))
+
+columnsums%>%filter(types=="GH" & perc >=85)
+columnsums%>%filter(types=="GH" & perc >=75)
+columnsums%>%filter(types=="GH" & perc <85 & perc >75)
+
+
+tree<-read.tree("1000bps_taxonomy_124taxa_tree.nwk")
+newtree_123samples<-keep.tip(tree,as.vector(rownames(above1000_tpm_cazymes_nozero)))
+
+above1000_tpm_cazymes_nozero<-above1000_tpm_cazymes_nozero[match(newtree_123samples$tip.label,rownames(above1000_tpm_cazymes_nozero)), ]
+
+##NOTE- we can say that CAZymes were acquired early in evolution as 13 GHs present in 60-75% of termite species are also present in the basal termites.
+#-----------------------------------------------------------
+
+
+```
+
+
+
+
+
+##stats-Moran's I and Phyl.anova()
+```{r}
+
+#Moran's I phylogenetic autocorrelation with termite tree-
+tree<-read.tree("1000bps_taxonomy_129taxa_tree.nwk")
+
+functions<-read.csv("april2_kofam30evalue_functions_data/cazymes_211columns_129samples_clr_april2021.csv",row.names=1,header=TRUE)
+functions$X<-NULL
+functions<-functions[match(tree$tip.label,rownames(functions)), ] #match with the tree
+
+library(adephylo)
+library(ape) 
+library(phylobase) 
+library(phylosignal) 
+ 
+
+functions[is.na(functions)] <-0 #convert any NA to zero
+functions<-functions[match(tree$tip.label,rownames(functions)), ]
+p4d <- phylo4d(tree,functions)
+p2<-phyloSignal(p4d = p4d, method = "I",reps=9999)
+
+
+##method1 for pvalue adjustment-
+#adjusted p-value using  fdr method-<p.adjust method>
+mod2 = as.data.frame(p2$pvalue)
+mod2$padjusted_lambda<-p.adjust(mod2$I, method='fdr')
+mod2$functions<-rownames(mod2)
+mod2<-mod2%>%dplyr::mutate(significance_padjusted=ifelse(padjusted_lambda<0.05,"*",""))
+mod2<-mod2%>%dplyr::mutate(significance_moranI=ifelse(I<0.05,"*",""))
+mod2$functions<-gsub(".hmm","",mod2$functions)
+
+genenames<-read.csv("C:/Users/jigyasa-arora.OIST/Dropbox (OIST)/gut bacteria/metagenome analysis/new_stuff/bins/annotation/all_contig_taxonomy/itol_images/version5/lignocellulose_litsearch_substrates.csv")
+mod2<-merge(mod2,genenames,by.x="functions",by.y="GH.Family",all.x = TRUE)
+
+write.csv(mod2,file="april2_kofam30evalue_functions_data/phylogenetic_autocorrelation_cazymes_211columns_129samples_april2021.csv")
+
+##method2 for pvalue adjustment- <doesn't work with small dataset like ours>
+#library(fdrtool)
+#mod2 = as.data.frame(p2$pvalue)
+#mod2pvalue<-fdrtool(as.vector(mod2$I), statistic=c("normal"), plot=FALSE, color.figure=FALSE, #verbose=TRUE,  cutoff.method=c("locfdr"), pct0=0.75)
+
+#mod3<-as.data.frame(mod2pvalue$lfdr)
+#rownames(mod3)<-rownames(mod2)
+#colnames(mod3)<-c("localfdr")
+#mod3<-mod3%>%dplyr::mutate(significance=ifelse(localfdr<0.05,"*",""))
+#write.csv(mod3,file="phylogenetic_autocorrelation_cazymes_178columns_124samples_localFDR.csv")
+#-----------------------------------------------------------------------------
+#Phylogenetic anova
+tree<-read.tree("1000bps_taxonomy_128taxa_tree.nwk")
+
+functions<-read.csv("april2_kofam30evalue_functions_data/cazymes_211columns_129samples_clr_april2021.csv",row.names = 1,header=TRUE)
+#individually-  running the function in a list of columns-
+functions$X<-NULL
+functions<-functions[match(tree$tip.label,rownames(functions)), ] #match the tree
+functions <-functions+1000 #add a constant to every value
+
+sampleinfo<-read.csv("taxonomy/sample_names_ids_withotherfactors_tomedit.2.csv")
+
+library(geomorph)
+phyl.anova.func2_list<-function(filename){
+filename<-as.data.frame(t(filename)) #convert row to column
+filename$label<-rownames(filename)
+geo_functions<-merge(filename,sampleinfo,by.x="label",by.y="termite_tree_labels")
+geo_functions<-geo_functions[match(tree$tip.label,geo_functions$label), ] #match the tree
+geo_functions$diet_type_number4<-as.factor(geo_functions$diet_type_number4)
+geo_functions[,2]<-as.numeric(geo_functions[,2])
+
+gdf <- geomorph.data.frame(abundance = geo_functions[,2], diet = as.factor(geo_functions$diet_type_number4), phy = tree) #create a dataframe that contains the data and phylogeny. [according to google forum]
+
+#group_name <- names(filename)[2] #get the correct column name. column 2 is the cazyme.
+
+geomorph.lm<-procD.lm(abundance ~ diet, iter=9999,RRPP=TRUE,effect.type = "F", SS.type = "II" ,data=gdf,print.progress = FALSE) #SS.type="II" is used if the groups (i.e. diet/lineage) are of uneven sizes.
+mod<-anova(geomorph.lm) #to examine if there is a phylogenetic correlation between "y" and "x"
+mod2<-as.data.frame(mod$table)
+mod2<-mod2[1,7]
+# d is distance between vector lengths is the difference in the amount of shape change per unit of size. If d is 0.05 i.e., | 0.20 - 0.15 |.  Why do this?  Two vectors can be correlated in direction - the way shape changes with size - but one group can exhibit more shape change per unit size than the other
+#D tells us the effect size of the standard deviation between two groups. Positive and above 0.2-0.3 means larger positive difference, while negative and below -0.2 to -0.3 means larger negative difference.
+
+pw<-pairwise(geomorph.lm,groups = as.factor(gdf$diet))
+pw_summary<-summary(pw,confidence=0.95,show.vectors = TRUE)
+pw_summary2<-as.data.frame(pw_summary$summary.table)
+
+pw_summary2$padjust<-p.adjust(pw_summary2$`Pr > d`,method="fdr") #fdr correction of p.value
+pw_summary2$diets<-rownames(pw_summary2)
+
+#convert the output to correct formats-
+names<-colnames(geo_functions[2])
+pw_summary2$genename<-rep(names,times=nrow(pw_summary2))
+library(tidyr)
+pw_summary3<-pw_summary2%>%dplyr::select("padjust","diets","genename")
+pw_spread<-pw_summary3%>%spread(diets,padjust)
+pw_spread2<-cbind(pw_spread,mod2)
+ 
+return(pw_spread2) 
+}
+
+functions_t<-as.data.frame(t(functions))
+xy.list <-  split(functions_t, seq(nrow(functions_t))) #convert df to a list
+
+cazymes_geomorph<-lapply(xy.list,phyl.anova.func2_list) #apply on all columns
+
+cazymes_geomorph_df<-do.call(rbind.data.frame,cazymes_geomorph)
+
+
+#find p.adjust for anova-
+cazymes_geomorph_df$padjust<-p.adjust(cazymes_geomorph_df$mod2,method="fdr")
+cazymes_geomorph_df<-cazymes_geomorph_df%>%mutate(significant_mod2=ifelse(mod2 <=0.05,"*",""))
+cazymes_geomorph_df<-cazymes_geomorph_df%>%mutate(significant_anova_padjust=ifelse(padjust <=0.05,"*",""))
+cazymes_geomorph_df$genename<-gsub(".hmm","",cazymes_geomorph_df$genename)
+
+genenames<-read.csv("C:/Users/jigyasa-arora.OIST/Dropbox (OIST)/gut bacteria/metagenome analysis/new_stuff/bins/annotation/all_contig_taxonomy/itol_images/version5/lignocellulose_litsearch_substrates.csv") #functional names 
+cazymes_geomorph_df2<-merge(cazymes_geomorph_df,genenames,by.x="genename",by.y="GH.Family",all.x = TRUE)
+
+write.csv(cazymes_geomorph_df2,file="april2_kofam30evalue_functions_data/Phylogenetic_anova_withdiet_211CAZYmes_129samples_march2021.csv")
+
+
+cazymes_geomorph_df2<-read.csv("april2_kofam30evalue_functions_data/Phylogenetic_anova_withdiet_211CAZYmes_129samples_march2021.csv")
+
+cazymes_geomorph_df2<-cazymes_geomorph_df2%>%mutate(new1.2=ifelse(X1.2<0.05 & X1.2>0.01,"*",ifelse(X1.2<0.01 & X1.2>0.001,"**",ifelse(X1.2<0.001,"***","not-significant"))))
+cazymes_geomorph_df2<-cazymes_geomorph_df2%>%mutate(new1.3=ifelse(X1.3<0.05 & X1.3>0.01,"*",ifelse(X1.3<0.01 & X1.3>0.001,"**",ifelse(X1.3<0.001,"***","not-significant"))))
+cazymes_geomorph_df2<-cazymes_geomorph_df2%>%mutate(new1.5=ifelse(X1.5<0.05 & X1.5>0.01,"*",ifelse(X1.5<0.01 & X1.5>0.001,"**",ifelse(X1.5<0.001,"***","not-significant"))))
+cazymes_geomorph_df2<-cazymes_geomorph_df2%>%mutate(new2.3=ifelse(X2.3<0.05 & X2.3>0.01,"*",ifelse(X2.3<0.01 & X2.3>0.001,"**",ifelse(X2.3<0.001,"***","not-significant"))))
+cazymes_geomorph_df2<-cazymes_geomorph_df2%>%mutate(new2.5=ifelse(X2.5<0.05 & X2.5>0.01,"*",ifelse(X2.5<0.01 & X2.5>0.001,"**",ifelse(X2.5<0.001,"***","not-significant"))))
+cazymes_geomorph_df2<-cazymes_geomorph_df2%>%mutate(new3.5=ifelse(X3.5<0.05 & X3.5>0.01,"*",ifelse(X3.5<0.01 & X3.5>0.001,"**",ifelse(X3.5<0.001,"***","not-significant"))))
+
+write.csv(cazymes_geomorph_df2,file="april2_kofam30evalue_functions_data/Phylogenetic_anova_withdiet_211CAZYmes_129samples_march2021.csv")
+
+```
+
+
+##phylogenetic anova on overallsum of cazymes (three comparisons)-
+```{r}
+
+##allcazymes combined-
+
+above1000_tpm_cazymes<-read.csv("cazymes_360columns_129samples_rawTPM_march2021.csv",row.names = 1)
+above1000_tpm_cazymes$X<-rownames(above1000_tpm_cazymes)
+above1000_tpm_cazymes[is.na(above1000_tpm_cazymes)] <-0
+
+#removing zero contaning rows and columns-
+above1000_tpm_cazymes_long<-gather(above1000_tpm_cazymes, cazymes, TPM, -c(X), factor_key=TRUE)
+above1000_tpm_cazymes_long<-above1000_tpm_cazymes_long%>%filter(TPM>0)
+
+
+#spread the data back with no zero values-
+above1000_tpm_cazymes_nozero<- above1000_tpm_cazymes_long %>% spread(cazymes,TPM)
+rownames(above1000_tpm_cazymes_nozero)<-above1000_tpm_cazymes_nozero$X
+above1000_tpm_cazymes_nozero$X<-NULL
+
+#combine all columns per samples-
+above1000_tpm_cazymes_nozero[is.na(above1000_tpm_cazymes_nozero)] <-0
+cazymes_all<-rowSums(above1000_tpm_cazymes_nozero)%>%as.data.frame()
+colnames(cazymes_all)<-c("allcazymes")
+
+write.csv(cazymes_all,file="cazymes_rowsum_128samples_rawtpm_march2021.csv")
+#----------------------------------------------------------------------
+tree<-read.tree("1000bps_taxonomy_128taxa_tree.nwk")
+
+functions<-read.csv("cazymes_rowsum_128samples_rawtpm_march2021.csv",row.names = 1,header=TRUE)
+#individually-  running the function in a list of columns-
+functions$X<-rownames(functions)
+functions<-functions[match(tree$tip.label,functions$X), ] #match the tree
+#functions <-functions+1000 #add a constant to every value
+functions$X<-NULL
+sampleinfo<-read.csv("taxonomy/sample_names_ids_withotherfactors_tomedit.2.csv")
+
+library(geomorph)
+phyl.anova.func2_list<-function(filename){
+filename<-as.data.frame(t(filename)) #convert row to column
+filename$label<-rownames(filename)
+geo_functions<-merge(filename,sampleinfo,by.x="label",by.y="termite_tree_labels")
+geo_functions<-geo_functions[match(tree$tip.label,geo_functions$label), ] #match the tree
+geo_functions$diet_type_number4<-as.factor(geo_functions$diet_type_number4)
+geo_functions[,2]<-as.numeric(geo_functions[,2])
+
+gdf <- geomorph.data.frame(abundance = geo_functions[,2], diet = as.factor(geo_functions$diet_type_number4), phy = tree) #create a dataframe that contains the data and phylogeny. [according to google forum]
+
+#group_name <- names(filename)[2] #get the correct column name. column 2 is the cazyme.
+
+geomorph.lm<-procD.lm(abundance ~ diet, iter=9999,RRPP=TRUE,effect.type = "F", SS.type = "II" ,data=gdf,print.progress = FALSE) #SS.type="II" is used if the groups (i.e. diet/lineage) are of uneven sizes.
+mod<-anova(geomorph.lm) #to examine if there is a phylogenetic correlation between "y" and "x"
+mod2<-as.data.frame(mod$table)
+mod2<-mod2[1,7]
+# d is distance between vector lengths is the difference in the amount of shape change per unit of size. If d is 0.05 i.e., | 0.20 - 0.15 |.  Why do this?  Two vectors can be correlated in direction - the way shape changes with size - but one group can exhibit more shape change per unit size than the other
+#D tells us the effect size of the standard deviation between two groups. Positive and above 0.2-0.3 means larger positive difference, while negative and below -0.2 to -0.3 means larger negative difference.
+
+pw<-pairwise(geomorph.lm,groups = as.factor(gdf$diet))
+pw_summary<-summary(pw,confidence=0.95,show.vectors = TRUE)
+pw_summary2<-as.data.frame(pw_summary$summary.table)
+
+pw_summary2$padjust<-p.adjust(pw_summary2$`Pr > d`,method="fdr") #fdr correction of p.value
+pw_summary2$diets<-rownames(pw_summary2)
+
+#convert the output to correct formats-
+names<-colnames(geo_functions[2])
+pw_summary2$genename<-rep(names,times=nrow(pw_summary2))
+library(tidyr)
+pw_summary3<-pw_summary2%>%dplyr::select("padjust","diets","genename")
+pw_spread<-pw_summary3%>%spread(diets,padjust)
+pw_spread2<-cbind(pw_spread,mod2)
+ 
+return(pw_spread2) 
+}
+
+functions_t<-as.data.frame(t(functions))
+xy.list <-  split(functions_t, seq(nrow(functions_t))) #convert df to a list
+
+cazymes_geomorph<-lapply(xy.list,phyl.anova.func2_list) #apply on all columns
+
+cazymes_geomorph_df<-do.call(rbind.data.frame,cazymes_geomorph)
+
+#add original TPM values per diet-
+functions<-read.csv("cazymes_rowsum_128samples_rawtpm_march2021.csv",row.names = 1,header=TRUE)
+#individually-  running the function in a list of columns-
+functions$X<-rownames(functions)
+functions<-functions[match(tree$tip.label,functions$X), ] #match the tree
+
+functions2<-merge(functions,sampleinfo,by.x="X",by.y="termite_tree_labels")
+setDT(functions2)
+functions2_diet<-functions2[, .(TPM = sum(allcazymes)), by = .(diet_type_number4)]
+functions2_diet2<-t(functions2_diet)%>%as.data.frame()
+
+phylanova_df<-cbind(functions2_diet2,cazymes_geomorph_df)%>%as.data.frame()
+write.csv(phylanova_df,file="Phylogenetic_anova_withdiet_ALLCAZYmes_128samples_march2021.csv")
+
+#----------------------------------------------------------------------------------------------
+#-----------------------------------------------------------------------------------------------
+##On all CAZYmes combined + clr transformed <USED!>
+
+above1000<-read.csv("new/functions_129samples_31003columns_rawtpm_april2021.csv")
+rownames(above1000)<-above1000$X
+
+cols<-colnames(above1000)%>%as.data.frame()
+colnames(cols)<-c("columns")
+cols<-cols%>%mutate(db=ifelse(str_detect(columns, "hmm"),"cazymes","others"))
+
+colsvector<-cols%>%filter(db=="cazymes")%>%select(columns)%>%as.vector()
+colsvector<-as.character(colsvector$columns)
+
+#get the CAZYmes out-
+above1000_cazymes<-above1000%>%select(colsvector)
+above1000_cazymes[is.na(above1000_cazymes)] <-0
+#sum the CAZymes-
+above1000_cazymes_summed<-rowSums(above1000_cazymes)%>%as.data.frame()
+colnames(above1000_cazymes_summed)<-c("allcazymes")
+above1000_cazymes_summed$X<-rownames(above1000_cazymes_summed)
+
+#add the summed CAZYmes back to the original dataset-
+above1000_notcazymes<-above1000%>%select(-colsvector)
+above1000_notcazymes_cazymes<-merge(above1000_notcazymes,above1000_cazymes_summed,by="X")
+rownames(above1000_notcazymes_cazymes)<-above1000_notcazymes_cazymes$X
+write.csv(above1000_notcazymes_cazymes,file="new/functions_129samples_keggpfam_cazymessummed_april2021.csv")
+
+#clr transform-
+clr_transform<-function(filename_spread2){ 
+library(propr) 
+filename_spread2[is.na(filename_spread2)] <-0 #convert NA to zero
+#rownames(filename_spread2)<-filename_spread2$label
+filename_spread2$label<-NULL
+filename_spread2$X<-NULL
+filename_spread2$sample_names<-NULL
+filename_spread2$samples<-NULL
+#add psuedo counts to account for missing and not-present data-  
+filename_spread2<-filename_spread2+0.65
+
+filename_propr<-propr(filename_spread2,metric="rho",ivar="clr")
+
+#creating a df with all the transformed pathways and metadata-
+filename_propr_df<-filename_propr@logratio
+
+return(filename_propr_df)
+}
+
+
+above1000_notcazymes_cazymes_clr<-clr_transform(above1000_notcazymes_cazymes)
+write.csv(above1000_notcazymes_cazymes_clr,file="above1000_notcazymes_cazymes_clr.csv")
+##TEST for clr transformation- row sum is zero
+head(round(rowSums(above1000_notcazymes_cazymes_clr[1,])),3)
+
+#phylognetic anova-
+above1000_notcazymes_cazymes_clr<-read.csv("new/above1000_notcazymes_cazymes_clr.csv")
+above1000_notcazymes_cazymes_clr2<-above1000_notcazymes_cazymes_clr%>%select(allcazymes)
+rownames(above1000_notcazymes_cazymes_clr2)<-above1000_notcazymes_cazymes_clr$X
+write.csv(above1000_notcazymes_cazymes_clr2,file="new/functions_129samples_cazymessummed_clr_april2021.csv")
+#-------------------------------------------------------------------------------------------
+tree<-read.tree("1000bps_taxonomy_129taxa_tree.nwk")
+
+functions<-read.csv("new/functions_129samples_cazymessummed_clr_april2021.csv",row.names = 1,header=TRUE)
+#individually-  running the function in a list of columns-
+functions$X<-rownames(functions)
+functions<-functions[match(tree$tip.label,functions$X), ] #match the tree
+functions$X<-NULL
+functions <-functions+1000 #add a constant to every value
+
+sampleinfo<-read.csv("taxonomy/sample_names_ids_withotherfactors_tomedit.2.csv")
+
+library(geomorph)
+phyl.anova.func2_list<-function(filename){
+filename<-as.data.frame(t(filename)) #convert row to column
+filename$label<-rownames(filename)
+geo_functions<-merge(filename,sampleinfo,by.x="label",by.y="termite_tree_labels")
+geo_functions<-geo_functions[match(tree$tip.label,geo_functions$label), ] #match the tree
+geo_functions$diet_type_number4<-as.factor(geo_functions$diet_type_number4)
+geo_functions[,2]<-as.numeric(geo_functions[,2])
+
+gdf <- geomorph.data.frame(abundance = geo_functions[,2], diet = as.factor(geo_functions$diet_type_number4), phy = tree) #create a dataframe that contains the data and phylogeny. [according to google forum]
+
+#group_name <- names(filename)[2] #get the correct column name. column 2 is the cazyme.
+
+geomorph.lm<-procD.lm(abundance ~ diet, iter=9999,RRPP=TRUE,effect.type = "F", SS.type = "II" ,data=gdf,print.progress = FALSE) #SS.type="II" is used if the groups (i.e. diet/lineage) are of uneven sizes.
+mod<-anova(geomorph.lm) #to examine if there is a phylogenetic correlation between "y" and "x"
+mod2<-as.data.frame(mod$table)
+mod2<-mod2[1,7]
+# d is distance between vector lengths is the difference in the amount of shape change per unit of size. If d is 0.05 i.e., | 0.20 - 0.15 |.  Why do this?  Two vectors can be correlated in direction - the way shape changes with size - but one group can exhibit more shape change per unit size than the other
+#D tells us the effect size of the standard deviation between two groups. Positive and above 0.2-0.3 means larger positive difference, while negative and below -0.2 to -0.3 means larger negative difference.
+
+pw<-pairwise(geomorph.lm,groups = as.factor(gdf$diet))
+pw_summary<-summary(pw,confidence=0.95,show.vectors = TRUE)
+pw_summary2<-as.data.frame(pw_summary$summary.table)
+
+pw_summary2$padjust<-p.adjust(pw_summary2$`Pr > d`,method="fdr") #fdr correction of p.value
+pw_summary2$diets<-rownames(pw_summary2)
+
+#convert the output to correct formats-
+names<-colnames(geo_functions[2])
+pw_summary2$genename<-rep(names,times=nrow(pw_summary2))
+library(tidyr)
+pw_summary3<-pw_summary2%>%dplyr::select("padjust","diets","genename")
+pw_spread<-pw_summary3%>%spread(diets,padjust)
+pw_spread2<-cbind(pw_spread,mod2)
+ 
+return(pw_spread2) 
+}
+
+functions_t<-as.data.frame(t(functions))
+xy.list <-  split(functions_t, seq(nrow(functions_t))) #convert df to a list
+
+cazymes_geomorph<-lapply(xy.list,phyl.anova.func2_list) #apply on all columns
+
+cazymes_geomorph_df<-do.call(rbind.data.frame,cazymes_geomorph)
+write.csv(cazymes_geomorph_df,file="new/Phylogenetic_anova_withdiet_ALLCAZYmes_summedclr_128samples_march2021.csv")
+
+#add original mean TPM values per diet-
+functions<-read.csv("new/functions_129samples_keggpfam_cazymessummed_april2021.csv",row.names = 1,header=TRUE)
+functions<-functions%>%select(allcazymes)
+#individually-  running the function in a list of columns-
+functions$X<-rownames(functions)
+
+functions2<-merge(functions,sampleinfo,by.x="X",by.y="termite_tree_labels")
+setDT(functions2)
+functions2_diet<-functions2[, .(TPM = mean(allcazymes)), by = .(diet_type_number4)]
+write.csv(functions2_diet,file="new/allcazymes_summedtpm_perdiet.csv")
+
+phylanova_df<-read.csv("new/Phylogenetic_anova_withdiet_ALLCAZYmes_summedclr_128samples_march2021.csv")
+phylanova_df<-phylanova_df%>%mutate(new1.2=ifelse(X1.2<0.05 & X1.2>0.01,"*",ifelse(X1.2<0.01 & X1.2>0.001,"**",ifelse(X1.2<0.001,"***","not-significant"))))
+phylanova_df<-phylanova_df%>%mutate(new1.3=ifelse(X1.3<0.05 & X1.3>0.01,"*",ifelse(X1.3<0.01 & X1.3>0.001,"**",ifelse(X1.3<0.001,"***","not-significant"))))
+phylanova_df<-phylanova_df%>%mutate(new1.5=ifelse(X1.5<0.05 & X1.5>0.01,"*",ifelse(X1.5<0.01 & X1.5>0.001,"**",ifelse(X1.5<0.001,"***","not-significant"))))
+phylanova_df<-phylanova_df%>%mutate(new2.3=ifelse(X2.3<0.05 & X2.3>0.01,"*",ifelse(X2.3<0.01 & X2.3>0.001,"**",ifelse(X2.3<0.001,"***","not-significant"))))
+phylanova_df<-phylanova_df%>%mutate(new2.5=ifelse(X2.5<0.05 & X2.5>0.01,"*",ifelse(X2.5<0.01 & X2.5>0.001,"**",ifelse(X2.5<0.001,"***","not-significant"))))
+phylanova_df<-phylanova_df%>%mutate(new3.5=ifelse(X3.5<0.05 & X3.5>0.01,"*",ifelse(X3.5<0.01 & X3.5>0.001,"**",ifelse(X3.5<0.001,"***","not-significant"))))
+
+write.csv(phylanova_df,file="new/Phylogenetic_anova_withdiet_ALLCAZYmes_summedclr_128samples_march2021.csv")
+
+
+#----------------------------------------------------------------------------------------------------
+#----------------------------------------------------------------------------------------------------
+##on all clr-transformed cazymes + summed
+
+cazymes_clr<-read.csv("cazymes_360columns_129samples_clr_march2021.csv",row.names = 1)
+cazymes_clr_summed<-rowSums(cazymes_clr)%>%as.data.frame()
+colnames(cazymes_clr_summed)<-c("allcazymes")
+
+write.csv(cazymes_clr_summed,file="functions_129samples_cazymes_clrsummed_march2021.csv")
+#-------------------------------------------------------------------------------------------
+tree<-read.tree("1000bps_taxonomy_129taxa_tree.nwk")
+
+functions<-read.csv("functions_129samples_cazymes_clrsummed_march2021.csv",row.names = 1,header=TRUE)
+#individually-  running the function in a list of columns-
+functions$X<-rownames(functions)
+functions<-functions[match(tree$tip.label,functions$X), ] #match the tree
+functions$X<-NULL
+functions <-functions+1000 #add a constant to every value
+
+sampleinfo<-read.csv("taxonomy/sample_names_ids_withotherfactors_tomedit.2.csv")
+
+library(geomorph)
+phyl.anova.func2_list<-function(filename){
+filename<-as.data.frame(t(filename)) #convert row to column
+filename$label<-rownames(filename)
+geo_functions<-merge(filename,sampleinfo,by.x="label",by.y="termite_tree_labels")
+geo_functions<-geo_functions[match(tree$tip.label,geo_functions$label), ] #match the tree
+geo_functions$diet_type_number4<-as.factor(geo_functions$diet_type_number4)
+geo_functions[,2]<-as.numeric(geo_functions[,2])
+
+gdf <- geomorph.data.frame(abundance = geo_functions[,2], diet = as.factor(geo_functions$diet_type_number4), phy = tree) #create a dataframe that contains the data and phylogeny. [according to google forum]
+
+#group_name <- names(filename)[2] #get the correct column name. column 2 is the cazyme.
+
+geomorph.lm<-procD.lm(abundance ~ diet, iter=9999,RRPP=TRUE,effect.type = "F", SS.type = "II" ,data=gdf,print.progress = FALSE) #SS.type="II" is used if the groups (i.e. diet/lineage) are of uneven sizes.
+mod<-anova(geomorph.lm) #to examine if there is a phylogenetic correlation between "y" and "x"
+mod2<-as.data.frame(mod$table)
+mod2<-mod2[1,7]
+# d is distance between vector lengths is the difference in the amount of shape change per unit of size. If d is 0.05 i.e., | 0.20 - 0.15 |.  Why do this?  Two vectors can be correlated in direction - the way shape changes with size - but one group can exhibit more shape change per unit size than the other
+#D tells us the effect size of the standard deviation between two groups. Positive and above 0.2-0.3 means larger positive difference, while negative and below -0.2 to -0.3 means larger negative difference.
+
+pw<-pairwise(geomorph.lm,groups = as.factor(gdf$diet))
+pw_summary<-summary(pw,confidence=0.95,show.vectors = TRUE)
+pw_summary2<-as.data.frame(pw_summary$summary.table)
+
+pw_summary2$padjust<-p.adjust(pw_summary2$`Pr > d`,method="fdr") #fdr correction of p.value
+pw_summary2$diets<-rownames(pw_summary2)
+
+#convert the output to correct formats-
+names<-colnames(geo_functions[2])
+pw_summary2$genename<-rep(names,times=nrow(pw_summary2))
+library(tidyr)
+pw_summary3<-pw_summary2%>%dplyr::select("padjust","diets","genename")
+pw_spread<-pw_summary3%>%spread(diets,padjust)
+pw_spread2<-cbind(pw_spread,mod2)
+ 
+return(pw_spread2) 
+}
+
+functions_t<-as.data.frame(t(functions))
+xy.list <-  split(functions_t, seq(nrow(functions_t))) #convert df to a list
+
+cazymes_geomorph<-lapply(xy.list,phyl.anova.func2_list) #apply on all columns
+
+cazymes_geomorph_df<-do.call(rbind.data.frame,cazymes_geomorph)
+
+#add original TPM values per diet-
+functions<-read.csv("functions_129samples_cazymes_clrsummed_march2021.csv",row.names = 1,header=TRUE)
+#individually-  running the function in a list of columns-
+functions$X<-rownames(functions)
+functions<-functions[match(tree$tip.label,functions$X), ] #match the tree
+
+functions2<-merge(functions,sampleinfo,by.x="X",by.y="termite_tree_labels")
+setDT(functions2)
+functions2_diet<-functions2[, .(TPM = sum(allcazymes)), by = .(diet_type_number4)]
+functions2_diet2<-t(functions2_diet)%>%as.data.frame()
+
+phylanova_df<-cbind(functions2_diet2,cazymes_geomorph_df)%>%as.data.frame()
+write.csv(phylanova_df,file="Phylogenetic_anova_withdiet_ALLCAZYmes_clrsummed_128samples_march2021.csv")
+
+
+##NOTE-Comparison amongst phylogenetic anova of (a) raw TPM, (b) sum of all cazymes+clr, (c) clr of all cazymes+summed give different results. We are using (b)
+```
+
+##phylogenetic anova on cellulases vs hemicellulases (clr transformed data)-
+```{r}
+
+##Comparison between cellulases vs hemicellulases vs oligosaccharides-
+above1000_tpm_cazymes<-read.csv("april2_kofam30evalue_functions_data/cazymes_360columns_129samples_rawTPM_april2021.csv",row.names = 1)
+above1000_tpm_cazymes$X<-rownames(above1000_tpm_cazymes)
+above1000_tpm_cazymes[is.na(above1000_tpm_cazymes)] <-0
+
+#removing zero contaning rows and columns-
+above1000_tpm_cazymes_long<-gather(above1000_tpm_cazymes, cazymes, TPM, -c(X), factor_key=TRUE)
+above1000_tpm_cazymes_long<-above1000_tpm_cazymes_long%>%filter(TPM>0)
+
+#extract out cazymes present in 198 cazyme families-
+functions<-read.csv("cazymes_198columns_128samples_clr_march2021.csv",row.names = 1,header=TRUE)
+colstoextract<-colnames(functions)
+
+above1000_tpm_cazymes_long<-above1000_tpm_cazymes_long%>%filter(cazymes %in% colstoextract)
+
+#extract out cazymes with putative substrate names-
+genenames<-read.csv("C:/Users/jigyasa-arora.OIST/Dropbox (OIST)/gut bacteria/metagenome analysis/new_stuff/bins/annotation/all_contig_taxonomy/itol_images/version5/lignocellulose_litsearch_substrates.csv")
+genenames<-genenames%>%filter(Substrate %in% c("hemicellulases","cellulases"))
+
+above1000_tpm_cazymes_long$cazymes<-gsub(".hmm","",above1000_tpm_cazymes_long$cazymes)
+above1000_tpm_cazymes_long2<-merge(above1000_tpm_cazymes_long,genenames,by.x="cazymes",by.y="GH.Family")
+
+#how many hemicellulases families and how many cellulases families present?
+above1000_tpm_cazymes_long2%>%select(cazymes,Substrate)%>%filter(Substrate=="hemicellulases")%>%unique()%>%nrow()
+above1000_tpm_cazymes_long2%>%select(cazymes,Substrate)%>%filter(Substrate=="cellulases")%>%unique()%>%nrow()
+
+#sum the cazyme TPM by substrate info-
+setDT(above1000_tpm_cazymes_long2)
+cazymes_substrates<-above1000_tpm_cazymes_long2[, .(TPM = sum(TPM)), by = .(X,Substrate)]
+
+#spread the data back -
+cazymes_substrates_wide <- cazymes_substrates %>% spread(Substrate,TPM)
+cazymes_substrates_wide<-as.data.frame(cazymes_substrates_wide)
+rownames(cazymes_substrates_wide)<-cazymes_substrates_wide$X
+cazymes_substrates_wide$X<-NULL
+cazymes_substrates_wide[is.na(cazymes_substrates_wide)] <-0
+
+write.csv(cazymes_substrates_wide,file="april2_kofam30evalue_functions_data/cazymes_susbtrate_rawtpm_april2021.csv")
+
+
+#the substrate summed cazymes are combined with  the remaining cazymes-
+cazymes_substrate<-read.csv("april2_kofam30evalue_functions_data/cazymes_susbtrate_rawtpm_april2021.csv")
+allcazymes<-read.csv("april2_kofam30evalue_functions_data/cazymes_360columns_129samples_rawTPM_april2021.csv",row.names=1)
+
+#removing the cazymes present in "cazymes_substrate" from the "allcazymes" df-
+cazymes_substrates_chosen<-above1000_tpm_cazymes_long2%>%select(cazymes)%>%unique()
+cazymes_substrates_chosen$cazymes<-gsub("$",".hmm",cazymes_substrates_chosen$cazymes)
+
+nonsubstratecazymes<-allcazymes%>%select(-cazymes_substrates_chosen$cazymes)
+nonsubstratecazymes$X<-rownames(nonsubstratecazymes)
+
+allcazymes_substrates<-merge(nonsubstratecazymes,cazymes_substrate,by="X")
+rownames(allcazymes_substrates)<-allcazymes_substrates$X
+
+#clr-transformed-
+clr_transform<-function(filename_spread2){ 
+library(propr) 
+filename_spread2[is.na(filename_spread2)] <-0 #convert NA to zero
+#rownames(filename_spread2)<-filename_spread2$label
+filename_spread2$label<-NULL
+filename_spread2$sample_names<-NULL
+filename_spread2$X<-NULL
+#add psuedo counts to account for missing and not-present data-  
+filename_spread2<-filename_spread2+0.65
+
+filename_propr<-propr(filename_spread2,metric="rho",ivar="clr")
+
+#creating a df with all the transformed pathways and metadata-
+filename_propr_df<-filename_propr@logratio
+
+return(filename_propr_df)
+}
+
+
+allcazymes_substrates_clr<-clr_transform(allcazymes_substrates)
+
+#get the cellulases and hemicellulases from the data-
+allcazymes_substrates_clr2<-allcazymes_substrates_clr%>%select(cellulases,hemicellulases)
+write.csv(allcazymes_substrates_clr2,file="april2_kofam30evalue_functions_data/cazymes_susbtrate_clr_april2021.csv")
+#-------------------------------------------------------------------------
+tree<-read.tree("1000bps_taxonomy_128taxa_tree.nwk")
+
+functions<-read.csv("april2_kofam30evalue_functions_data/cazymes_susbtrate_clr_april2021.csv",row.names = 1,header=TRUE)
+#individually-  running the function in a list of columns-
+functions$X<-rownames(functions)
+functions<-functions[match(tree$tip.label,functions$X), ] #match the tree
+#functions <-functions+1000 #add a constant to every value
+functions$X<-NULL
+sampleinfo<-read.csv("taxonomy/sample_names_ids_withotherfactors_tomedit.2.csv")
+
+library(geomorph)
+phyl.anova.func2_list<-function(filename){
+filename<-as.data.frame(t(filename)) #convert row to column
+filename$label<-rownames(filename)
+geo_functions<-merge(filename,sampleinfo,by.x="label",by.y="termite_tree_labels")
+geo_functions<-geo_functions[match(tree$tip.label,geo_functions$label), ] #match the tree
+geo_functions$diet_type_number4<-as.factor(geo_functions$diet_type_number4)
+geo_functions[,2]<-as.numeric(geo_functions[,2])
+
+gdf <- geomorph.data.frame(abundance = geo_functions[,2], diet = as.factor(geo_functions$diet_type_number4), phy = tree) #create a dataframe that contains the data and phylogeny. [according to google forum]
+
+#group_name <- names(filename)[2] #get the correct column name. column 2 is the cazyme.
+
+geomorph.lm<-procD.lm(abundance ~ diet, iter=9999,RRPP=TRUE,effect.type = "F", SS.type = "II" ,data=gdf,print.progress = FALSE) #SS.type="II" is used if the groups (i.e. diet/lineage) are of uneven sizes.
+mod<-anova(geomorph.lm) #to examine if there is a phylogenetic correlation between "y" and "x"
+mod2<-as.data.frame(mod$table)
+mod2<-mod2[1,7]
+# d is distance between vector lengths is the difference in the amount of shape change per unit of size. If d is 0.05 i.e., | 0.20 - 0.15 |.  Why do this?  Two vectors can be correlated in direction - the way shape changes with size - but one group can exhibit more shape change per unit size than the other
+#D tells us the effect size of the standard deviation between two groups. Positive and above 0.2-0.3 means larger positive difference, while negative and below -0.2 to -0.3 means larger negative difference.
+
+pw<-pairwise(geomorph.lm,groups = as.factor(gdf$diet))
+pw_summary<-summary(pw,confidence=0.95,show.vectors = TRUE)
+pw_summary2<-as.data.frame(pw_summary$summary.table)
+
+pw_summary2$padjust<-p.adjust(pw_summary2$`Pr > d`,method="fdr") #fdr correction of p.value
+pw_summary2$diets<-rownames(pw_summary2)
+
+#convert the output to correct formats-
+names<-colnames(geo_functions[2])
+pw_summary2$genename<-rep(names,times=nrow(pw_summary2))
+library(tidyr)
+pw_summary3<-pw_summary2%>%dplyr::select("padjust","diets","genename")
+pw_spread<-pw_summary3%>%spread(diets,padjust)
+pw_spread2<-cbind(pw_spread,mod2)
+ 
+return(pw_spread2) 
+}
+
+functions_t<-as.data.frame(t(functions))
+xy.list <-  split(functions_t, seq(nrow(functions_t))) #convert df to a list
+
+cazymes_geomorph<-lapply(xy.list,phyl.anova.func2_list) #apply on all columns
+
+cazymes_geomorph_df<-do.call(rbind.data.frame,cazymes_geomorph)
+
+write.csv(cazymes_geomorph_df,file="april2_kofam30evalue_functions_data/Phylogenetic_anova_withdiet_bysubstrate_clr_128samples_april2021.csv")
+
+#---------------------------------------------------------------------------------------
+#add original TPM values per substrate-
+cazymes_susbtrate<-read.csv("april2_kofam30evalue_functions_data/cazymes_susbtrate_rawtpm_april2021.csv")
+#individually-  running the function in a list of columns-
+rownames(cazymes_susbtrate)<-cazymes_substrate$X
+
+sampleinfo<-read.csv("taxonomy/sample_names_ids_withotherfactors_tomedit.2.csv")
+cazymes_susbtrate2<-merge(cazymes_susbtrate,sampleinfo,by.x="X",by.y="termite_tree_labels")
+cols<-colnames(cazymes_susbtrate)
+cols<-cols[-1]
+
+setDT(cazymes_susbtrate2)
+cazymes_susbtrate2_diet<-cazymes_susbtrate2[, lapply(.SD, mean, na.rm=TRUE), by=diet_type_number4, .SDcols=cols ]
+cazymes_susbtrate2_diet<-as.data.frame(cazymes_susbtrate2_diet)
+cazymes_susbtrate2_diet$diet_type_number4<-paste("diet",cazymes_susbtrate2_diet$diet_type_number4,sep="_")
+write.csv(cazymes_susbtrate2_diet,file="april2_kofam30evalue_functions_data/cazymes_bysubstrate_bydiet.csv")
+
+#---------------------------------------------------------------------------------------
+cazymes_geomorph_df<-read.csv("april2_kofam30evalue_functions_data/Phylogenetic_anova_withdiet_bysubstrate_clr_128samples_april2021.csv")
+
+cazymes_geomorph_df<-cazymes_geomorph_df%>%mutate(new1.2=ifelse(X1.2<0.05 & X1.2>0.01,"*",ifelse(X1.2<0.01 & X1.2>0.001,"**",ifelse(X1.2<0.001,"***","not-significant"))))
+cazymes_geomorph_df<-cazymes_geomorph_df%>%mutate(new1.3=ifelse(X1.3<0.05 & X1.3>0.01,"*",ifelse(X1.3<0.01 & X1.3>0.001,"**",ifelse(X1.3<0.001,"***","not-significant"))))
+cazymes_geomorph_df<-cazymes_geomorph_df%>%mutate(new1.5=ifelse(X1.5<0.05 & X1.5>0.01,"*",ifelse(X1.5<0.01 & X1.5>0.001,"**",ifelse(X1.5<0.001,"***","not-significant"))))
+cazymes_geomorph_df<-cazymes_geomorph_df%>%mutate(new2.3=ifelse(X2.3<0.05 & X2.3>0.01,"*",ifelse(X2.3<0.01 & X2.3>0.001,"**",ifelse(X2.3<0.001,"***","not-significant"))))
+cazymes_geomorph_df<-cazymes_geomorph_df%>%mutate(new2.5=ifelse(X2.5<0.05 & X2.5>0.01,"*",ifelse(X2.5<0.01 & X2.5>0.001,"**",ifelse(X2.5<0.001,"***","not-significant"))))
+cazymes_geomorph_df<-cazymes_geomorph_df%>%mutate(new3.5=ifelse(X3.5<0.05 & X3.5>0.01,"*",ifelse(X3.5<0.01 & X3.5>0.001,"**",ifelse(X3.5<0.001,"***","not-significant"))))
+
+write.csv(cazymes_geomorph_df,file="april2_kofam30evalue_functions_data/Phylogenetic_anova_withdiet_bysubstrate_clr_128samples_april2021.csv")
+
+```
+
+
+##testing if the phylo.anova results vary between clr data vs TPM data-
+```{r}
+
+##Phylogenetic anova for all cazymes using raw TPM-
+
+tree<-read.tree("1000bps_taxonomy_128taxa_tree.nwk")
+
+functions<-read.csv("cazymes_360columns_129samples_rawTPM_march2021.csv",row.names = 1,header=TRUE)
+#individually-  running the function in a list of columns-
+functions$X<-rownames(functions)
+functions<-functions[match(tree$tip.label,functions$X), ] #match the tree
+#functions <-functions+1000 #add a constant to every value
+functions$X<-NULL
+functions[is.na(functions)] <-0
+
+sampleinfo<-read.csv("taxonomy/sample_names_ids_withotherfactors_tomedit.2.csv")
+
+library(geomorph)
+phyl.anova.func2_list<-function(filename){
+filename<-as.data.frame(t(filename)) #convert row to column
+filename$label<-rownames(filename)
+geo_functions<-merge(filename,sampleinfo,by.x="label",by.y="termite_tree_labels")
+geo_functions<-geo_functions[match(tree$tip.label,geo_functions$label), ] #match the tree
+geo_functions$diet_type_number4<-as.factor(geo_functions$diet_type_number4)
+geo_functions[,2]<-as.numeric(geo_functions[,2])
+
+gdf <- geomorph.data.frame(abundance = geo_functions[,2], diet = as.factor(geo_functions$diet_type_number4), phy = tree) #create a dataframe that contains the data and phylogeny. [according to google forum]
+
+#group_name <- names(filename)[2] #get the correct column name. column 2 is the cazyme.
+
+geomorph.lm<-procD.lm(abundance ~ diet, iter=9999,RRPP=TRUE,effect.type = "F", SS.type = "II" ,data=gdf,print.progress = FALSE) #SS.type="II" is used if the groups (i.e. diet/lineage) are of uneven sizes.
+mod<-anova(geomorph.lm) #to examine if there is a phylogenetic correlation between "y" and "x"
+mod2<-as.data.frame(mod$table)
+mod2<-mod2[1,7]
+# d is distance between vector lengths is the difference in the amount of shape change per unit of size. If d is 0.05 i.e., | 0.20 - 0.15 |.  Why do this?  Two vectors can be correlated in direction - the way shape changes with size - but one group can exhibit more shape change per unit size than the other
+#D tells us the effect size of the standard deviation between two groups. Positive and above 0.2-0.3 means larger positive difference, while negative and below -0.2 to -0.3 means larger negative difference.
+
+pw<-pairwise(geomorph.lm,groups = as.factor(gdf$diet))
+pw_summary<-summary(pw,confidence=0.95,show.vectors = TRUE)
+pw_summary2<-as.data.frame(pw_summary$summary.table)
+
+pw_summary2$padjust<-p.adjust(pw_summary2$`Pr > d`,method="fdr") #fdr correction of p.value
+pw_summary2$diets<-rownames(pw_summary2)
+
+#convert the output to correct formats-
+names<-colnames(geo_functions[2])
+pw_summary2$genename<-rep(names,times=nrow(pw_summary2))
+library(tidyr)
+pw_summary3<-pw_summary2%>%dplyr::select("padjust","diets","genename")
+pw_spread<-pw_summary3%>%spread(diets,padjust)
+pw_spread2<-cbind(pw_spread,mod2)
+ 
+return(pw_spread2) 
+}
+
+functions_t<-as.data.frame(t(functions))
+xy.list <-  split(functions_t, seq(nrow(functions_t))) #convert df to a list
+
+cazymes_geomorph<-lapply(xy.list,phyl.anova.func2_list) #apply on all columns
+
+cazymes_geomorph_df<-do.call(rbind.data.frame,cazymes_geomorph)
+
+#add original TPM values per diet-
+functions<-read.csv("cazymes_360columns_129samples_rawTPM_march2021.csv",row.names = 1,header=TRUE)
+#individually-  running the function in a list of columns-
+functions$X<-rownames(functions)
+functions<-functions[match(tree$tip.label,functions$X), ] #match the tree
+
+functions2<-merge(functions,sampleinfo,by.x="X",by.y="termite_tree_labels")
+
+cols<-colnames(functions)
+cols<-cols[-361]
+
+setDT(functions2)
+functions2_diet<-functions2[, lapply(.SD, sum, na.rm=TRUE), by=diet_type_number4, .SDcols=cols ]
+functions2_diet<-as.data.frame(functions2_diet)
+functions2_diet$diet_type_number4<-paste("diet",functions2_diet$diet_type_number4,sep="_")
+
+functions2_diet2<-t(functions2_diet)%>%as.data.frame()
+functions2_diet2$names<-rownames(functions2_diet2)
+
+phylanova_df<-merge(functions2_diet2,cazymes_geomorph_df,by.x="names",by.y="genename")
+write.csv(phylanova_df,file="Phylogenetic_anova_withdiet_rawtpm_128samples_march2021.csv")
+
+phylanova_df<-read.csv("Phylogenetic_anova_withdiet_rawtpm_128samples_march2021.csv")
+phylanova_df<-phylanova_df%>%mutate(new1.02=ifelse(X1.02<0.05 & X1.02>0.01,"*",ifelse(X1.02<0.01 & X1.02>0.001,"**",ifelse(X1.02<0.001,"***","not-significant"))))
+phylanova_df<-phylanova_df%>%mutate(new1.03=ifelse(X1.03<0.05 & X1.03>0.01,"*",ifelse(X1.03<0.01 & X1.03>0.001,"**",ifelse(X1.03<0.001,"***","not-significant"))))
+phylanova_df<-phylanova_df%>%mutate(new1.05=ifelse(X1.05<0.05 & X1.05>0.01,"*",ifelse(X1.05<0.01 & X1.05>0.001,"**",ifelse(X1.05<0.001,"***","not-significant"))))
+phylanova_df<-phylanova_df%>%mutate(new2.03=ifelse(X2.03<0.05 & X2.03>0.01,"*",ifelse(X2.03<0.01 & X2.03>0.001,"**",ifelse(X2.03<0.001,"***","not-significant"))))
+phylanova_df<-phylanova_df%>%mutate(new2.05=ifelse(X2.05<0.05 & X2.05>0.01,"*",ifelse(X2.05<0.01 & X2.05>0.001,"**",ifelse(X2.05<0.001,"***","not-significant"))))
+phylanova_df<-phylanova_df%>%mutate(new3.05=ifelse(X3.05<0.05 & X3.05>0.01,"*",ifelse(X3.05<0.01 & X3.05>0.001,"**",ifelse(X3.05<0.001,"***","not-significant"))))
+
+
+write.csv(phylanova_df,file="Phylogenetic_anova_withdiet_rawtpm_128samples_march2021.csv")
+##NOTE-Phylogenetic anova of raw TPM vs clr-TPM of CAZYmes gives very different results.
+```
+
+
+
+
+##basic stats on cazymes with diet-
+```{r} 
+
+#Generatin non-zero data  -
+above1000_tpm_cazymes<-read.csv("cazymes_360columns_129samples_rawTPM_march2021.csv")
+
+#removing zero contaning rows and columns-
+above1000_tpm_cazymes[is.na(above1000_tpm_cazymes)] <-0
+above1000_tpm_cazymes_long<-gather(above1000_tpm_cazymes, cazymes, TPM, -c(X), factor_key=TRUE)
+above1000_tpm_cazymes_long<-above1000_tpm_cazymes_long%>%filter(TPM>0)
+
+#spread the data back with no zero values-
+above1000_tpm_cazymes_nozero<- above1000_tpm_cazymes_long %>% spread(cazymes,TPM)
+rownames(above1000_tpm_cazymes_nozero)<-above1000_tpm_cazymes_nozero$X
+above1000_tpm_cazymes_nozero$X<-NULL
+above1000_tpm_cazymes_nozero[is.na(above1000_tpm_cazymes_nozero)] <-0 #convert NA to zero
+
+#convert everything to binary-
+above1000_tpm_cazymes_nozero_binary<-above1000_tpm_cazymes_nozero
+above1000_tpm_cazymes_nozero_binary[is.na(above1000_tpm_cazymes_nozero_binary)] <-0 #convert NA to zero
+above1000_tpm_cazymes_nozero_binary[above1000_tpm_cazymes_nozero_binary > 0] <- 1 
+above1000_tpm_cazymes_nozero_binary[above1000_tpm_cazymes_nozero_binary <= 0] <-0
+
+print(paste0("There are ", ncol(above1000_tpm_cazymes_nozero_binary), " many CAZYmes in the metagenomes"))
+#-------------------------------------------------------------------------------
+
+## Overall distribution per diet-
+above1000_tpm_cazymes_nozero_binary_rows<-above1000_tpm_cazymes_nozero_binary %>% mutate(sumVar = rowSums(.[1:ncol(above1000_tpm_cazymes_nozero_binary)]))
+rownames(above1000_tpm_cazymes_nozero_binary_rows)<-rownames(above1000_tpm_cazymes_nozero_binary)
+above1000_tpm_cazymes_nozero_binary_rows<-above1000_tpm_cazymes_nozero_binary_rows%>%select(sumVar)
+
+above1000_tpm_cazymes_nozero_binary_rows$X<-rownames(above1000_tpm_cazymes_nozero_binary_rows)
+
+sampleinfo<-read.csv("taxonomy/sample_names_ids_withotherfactors_tomedit.2.csv")
+above1000_tpm_cazymes_nozero_binary_rows<-merge(above1000_tpm_cazymes_nozero_binary_rows,sampleinfo,by.x="X",by.y="termite_tree_labels")
+
+setDT(above1000_tpm_cazymes_nozero_binary_rows)
+binarycazymes_diet<-above1000_tpm_cazymes_nozero_binary_rows[, .(sumVar = sum(sumVar)), by = .(diet_type_number4)]
+
+
+head(binarycazymes_diet,5)
+#--------------------------------------------------------------------------------
+#relative abundance of cazymes by diet-
+above1000_tpm_cazymes_nozero_rows<-above1000_tpm_cazymes_nozero %>% mutate(sumVar = rowSums(.[1:ncol(above1000_tpm_cazymes_nozero)]))
+rownames(above1000_tpm_cazymes_nozero_rows)<-rownames(above1000_tpm_cazymes_nozero)
+above1000_tpm_cazymes_nozero_rows<-above1000_tpm_cazymes_nozero_rows%>%select(sumVar)
+
+above1000_tpm_cazymes_nozero_rows$X<-rownames(above1000_tpm_cazymes_nozero_rows)
+
+
+sampleinfo<-read.csv("taxonomy/sample_names_ids_withotherfactors_tomedit.2.csv")
+above1000_tpm_cazymes_nozero_rows<-merge(above1000_tpm_cazymes_nozero_rows,sampleinfo,by.x="X",by.y="termite_tree_labels")
+
+setDT(above1000_tpm_cazymes_nozero_rows)
+relativecazymes_diet<-above1000_tpm_cazymes_nozero_rows[, .(sumVar = sum(sumVar)), by = .(diet_type_number4)]
+
+
+head(relativecazymes_diet,5)
+ 
+
+##NOTE- both tables, binary counts of CAZYmes in 4 diets and relative abundance of CAZYmes in 4 diets show that diet1 and diet2 are have more CAZYmes than diet3 and diet5.
+#---------------------------------------------------------------------------------
+
+```
+
+
+
+
+## Which CAZymes are more abundant in Fungal feeders and Lower termites (TPM values)-
+```{r}
+
+##relative abundance of GH for enzymes significantly different in Macrotermitinae as compared to other wood-feeding Termitidae-
+phyloanova<-read.csv("Phylogenetic_anova_withdiet_219CAZYmes_128samples_march2021.csv",row.names=1)
+phyloanova_macro<-phyloanova%>%filter(X2.5 <=0.05) #get significantly different GHs in diet5 vs diet2
+
+
+#TPM abundance of each CAZYme per diet-
+above1000_tpm_cazymes_nozero$X<-rownames(above1000_tpm_cazymes_nozero)
+sampleinfo<-read.csv("taxonomy/sample_names_ids_withotherfactors_tomedit.2.csv")
+above1000_tpm_cazymes_nozero_diets<-merge(above1000_tpm_cazymes_nozero,sampleinfo,by.x="X",by.y="termite_tree_labels")
+
+cols<-colnames(above1000_tpm_cazymes_nozero)
+cols<-cols[-347]
+
+setDT(above1000_tpm_cazymes_nozero_diets)
+above1000_tpm_cazymes_nozero_diets2<-above1000_tpm_cazymes_nozero_diets[, lapply(.SD, sum, na.rm=TRUE), by=diet_type_number4, .SDcols=cols ]
+above1000_tpm_cazymes_nozero_diets2<-as.data.frame(above1000_tpm_cazymes_nozero_diets2)
+above1000_tpm_cazymes_nozero_diets2$diet_type_number4<-paste("diet",above1000_tpm_cazymes_nozero_diets2$diet_type_number4,sep="_")
+
+#-------------------------------------------------------------------------
+#abundance in Macrotermitinae-
+rownames(above1000_tpm_cazymes_nozero_diets2)<-above1000_tpm_cazymes_nozero_diets2$diet_type_number4
+above1000_tpm_cazymes_nozero_diets2$diet_type_number4<-NULL
+above1000_tpm_cazymes_nozero_diets2_t<-t(above1000_tpm_cazymes_nozero_diets2)%>%as.data.frame()
+above1000_tpm_cazymes_nozero_diets2_t_selected<-above1000_tpm_cazymes_nozero_diets2_t%>%filter(diet_5>diet_2) #all cazymes abundant in Macrotermitinae as compared to wood-feeding Termitinae.
+
+above1000_tpm_cazymes_nozero_diets2_t_selected$genename<-rownames(above1000_tpm_cazymes_nozero_diets2_t_selected)
+above1000_tpm_cazymes_nozero_diets2_t_selected$genename<-gsub(".hmm","",above1000_tpm_cazymes_nozero_diets2_t_selected$genename)
+
+macro_abundant_phylanova<-merge(above1000_tpm_cazymes_nozero_diets2_t_selected,phyloanova_macro,by="genename")
+write.csv(macro_abundant_phylanova,file="cazymes_abundantinMacrotermitinae_vs_Termitinae_march2021.csv")
+
+##NOTE-Out of 111 CAZYmes significantly abundant in Macrotermitinae vs Wood-feeding higher termites (nrow(phyloanova_macro)), 64 are more abundant in Macrotermitinae samples (nrow(macro_abundant_phylanova)).
+
+#reduced in Macrotermitinae-
+above1000_tpm_cazymes_nozero_diets2_t_selected<-above1000_tpm_cazymes_nozero_diets2_t%>%filter(diet_5<diet_2) #all cazymes reduced in Macrotermitinae as compared to wood-feeding Termitinae.
+
+above1000_tpm_cazymes_nozero_diets2_t_selected$genename<-rownames(above1000_tpm_cazymes_nozero_diets2_t_selected)
+above1000_tpm_cazymes_nozero_diets2_t_selected$genename<-gsub(".hmm","",above1000_tpm_cazymes_nozero_diets2_t_selected$genename)
+
+macro_reduced_phylanova<-merge(above1000_tpm_cazymes_nozero_diets2_t_selected,phyloanova_macro,by="genename")
+write.csv(macro_reduced_phylanova,file="cazymes_reducedinMacrotermitinae_vs_Termitinae_march2021.csv")
+
+##NOTE-Out of 111 CAZYmes significantly abundant in Macrotermitinae vs Wood-feeding higher termites (nrow(phyloanova_macro)), 47 are reduced in Macrotermitinae samples (nrow(macro_reduced_phylanova)).
+
+#----------------------------------------------------------------------------
+##regenerate the data for lower termites-
+phyloanova<-read.csv("Phylogenetic_anova_withdiet_219CAZYmes_128samples_march2021.csv",row.names=1)
+
+#phyloanova_lower<-phyloanova%>%filter(X1.2 <=0.05 | X1.3 <=0.05 | X1.5 <=0.05 ) #get significantly different GHs
+phyloanova_lower<-phyloanova%>%filter(X1.2 <=0.05) #significantly different GHs in lower termites vs wood-feeding higher termites
+
+above1000_tpm_cazymes_nozero$X<-rownames(above1000_tpm_cazymes_nozero)
+sampleinfo<-read.csv("taxonomy/sample_names_ids_withotherfactors_tomedit.2.csv")
+above1000_tpm_cazymes_nozero_diets<-merge(above1000_tpm_cazymes_nozero,sampleinfo,by.x="X",by.y="termite_tree_labels")
+
+cols<-colnames(above1000_tpm_cazymes_nozero)
+cols<-cols[-347]
+
+setDT(above1000_tpm_cazymes_nozero_diets)
+above1000_tpm_cazymes_nozero_diets2<-above1000_tpm_cazymes_nozero_diets[, lapply(.SD, sum, na.rm=TRUE), by=diet_type_number4, .SDcols=cols ]
+above1000_tpm_cazymes_nozero_diets2<-as.data.frame(above1000_tpm_cazymes_nozero_diets2)
+above1000_tpm_cazymes_nozero_diets2$diet_type_number4<-paste("diet",above1000_tpm_cazymes_nozero_diets2$diet_type_number4,sep="_")
+
+
+
+#-------------------------------------------------------------------------------
+##Cazymes abundant in lower termites-
+rownames(above1000_tpm_cazymes_nozero_diets2)<-above1000_tpm_cazymes_nozero_diets2$diet_type_number4
+above1000_tpm_cazymes_nozero_diets2$diet_type_number4<-NULL
+above1000_tpm_cazymes_nozero_diets2_t<-t(above1000_tpm_cazymes_nozero_diets2)%>%as.data.frame()
+above1000_tpm_cazymes_nozero_diets2_t_selected<-above1000_tpm_cazymes_nozero_diets2_t%>%filter(diet_1>diet_2) #all cazymes abundant in lower termites as compared to wood-feeding higher.
+
+above1000_tpm_cazymes_nozero_diets2_t_selected$genename<-rownames(above1000_tpm_cazymes_nozero_diets2_t_selected)
+above1000_tpm_cazymes_nozero_diets2_t_selected$genename<-gsub(".hmm","",above1000_tpm_cazymes_nozero_diets2_t_selected$genename)
+
+lower_abundant_phylanova<-merge(above1000_tpm_cazymes_nozero_diets2_t_selected,phyloanova_lower,by="genename")
+write.csv(lower_abundant_phylanova,file="cazymes_abundantLowertermitesvsWoodfeedinghigher_march2021.csv")
+
+
+#NOTE- Out of 139 CAZYmes signficant in phyl.anova() for lower termites (nrow(phyloanova_lower)), 67 are abundant in lower termites vs wood-feeding higher termites (nrow(lower_abundant_phylanova)).
+
+##CAZYmes reduced in lower termites-
+above1000_tpm_cazymes_nozero_diets2_t_selected<-above1000_tpm_cazymes_nozero_diets2_t%>%filter(diet_1<diet_2) #all cazymes reduced in lower termites as wood-feeding higher termites.
+
+above1000_tpm_cazymes_nozero_diets2_t_selected$genename<-rownames(above1000_tpm_cazymes_nozero_diets2_t_selected)
+above1000_tpm_cazymes_nozero_diets2_t_selected$genename<-gsub(".hmm","",above1000_tpm_cazymes_nozero_diets2_t_selected$genename)
+
+lower_reduced_phylanova<-merge(above1000_tpm_cazymes_nozero_diets2_t_selected,phyloanova_lower,by="genename")
+write.csv(lower_reduced_phylanova,file="cazymes_reducedLowertermitesvsWoodfeedinghigher_march2021.csv")
+
+#NOTE-Out of 139 CAZYmes significant in phyl.anova() for lower termites (nrow(phyloanova_lower)), 72 are reduced in lower termites vs wood-feeding higher termites (nrow(lower_abundant_phylanova)).
+
+above1000_tpm_cazymes_nozero_diets2%>%select(GH8.hmm)
+above1000_tpm_cazymes_nozero_diets2%>%select(GH13_8.hmm)
+above1000_tpm_cazymes_nozero_diets2%>%select(GH92.hmm)
+above1000_tpm_cazymes_nozero_diets2%>%select(GH133.hmm)
+
+```
+
+
+
+##Relative abundance in cazymes data (TPM) -TableS7
+```{r}
+
+##abundance per diet in clr transformed data-
+cazymes_clr_10perc_3above<-read.csv("april2_kofam30evalue_functions_data/cazymes_198columns_128samples_clr_march2021.csv")
+sampleinfo<-read.csv("taxonomy/sample_names_ids_withotherfactors_tomedit.2.csv")
+cazymes_clr_10perc_3above2<-merge(cazymes_clr_10perc_3above,sampleinfo,by.x="X",by.y="termite_tree_labels")
+cols<-colnames(cazymes_clr_10perc_3above)
+cols<-cols[-1]
+setDT(cazymes_clr_10perc_3above2)
+cazymes_clr_10perc_3above2_diet<-cazymes_clr_10perc_3above2[, lapply(.SD, sum, na.rm=TRUE), by=diet_type_number4, .SDcols=cols ] #for all the cazymes
+
+write.csv(cazymes_clr_10perc_3above2_diet,file="cazymes_clr_perdiet_fortableS7_march2021.csv")
+#-------------------------------------------------------------------------------------------------
+#mean abundance per diet in TPM-
+cazymes_tpm<-read.csv("april2_kofam30evalue_functions_data/cazymes_360columns_129samples_rawTPM_april2021.csv")
+
+#extract out the columns used in clr-transformed data-
+cazymes_clr_10perc_3above<-read.csv("april2_kofam30evalue_functions_data/cazymes_211columns_129samples_clr_april2021.csv")
+
+cazymes_tpm2<-cazymes_tpm%>%select(colnames(cazymes_clr_10perc_3above))
+cazymes_tpm3<-cazymes_tpm2%>%filter(X %in% cazymes_clr_10perc_3above$X)
+
+#mean per cazyme per diet-
+sampleinfo<-read.csv("taxonomy/sample_names_ids_withotherfactors_tomedit.2.csv")
+cazymes_tpm4<-merge(cazymes_tpm3,sampleinfo,by.x="X",by.y="termite_tree_labels")
+cazymes_tpm4[is.na(cazymes_tpm4)] <-0
+rownames(cazymes_tpm4)<-cazymes_tpm4$X
+cazymes_tpm4<-cazymes_tpm4%>%select(-c("X","samples","mgm_id","biogeography","diet_type_number2","diet_type_number","diet_type","diet","lineage","higher_lower_number","higher_lower","higher_lower_basal","full_sample_name","species_name", "batch_effect","diet_type_number3","beast_tree_labels","lineage2","sampleids" ))
+
+cols<-colnames(cazymes_tpm3)
+cols<-cols[-1]
+
+#by mean-
+setDT(cazymes_tpm4)
+cazymes_tpm_diet<-cazymes_tpm4[, lapply(.SD, mean, na.rm=TRUE), by=diet_type_number4, .SDcols=cols ]
+write.csv(cazymes_tpm_diet,file="april2_kofam30evalue_functions_data/cazymes_tpm_perdiet_fortableS7_april2021.csv")
+
+#by mean and stderror-
+cazymes_tpm_diet2<-do.call(data.frame, aggregate(. ~ diet_type_number4, cazymes_tpm4, function(x) c(mean = mean(x), sd = sd(x))))
+#write.csv(cazymes_tpm_diet2,file="new/cazymes_tpm_perfiet_fortableS7_meansd_march2021.CSV")
+
+
+#convert the phylogenetic anova results to asterisk for Table S7-
+cazymes<-read.csv("new/Phylogenetic_anova_withdiet_211CAZYmes_128samples_march2021.csv")
+
+cazymes<-cazymes%>%mutate(new1.02=ifelse(X1.2<0.05 & X1.2>0.01,"*",ifelse(X1.2<0.01 & X1.2>0.001,"**",ifelse(X1.2<0.001,"***","not-significant"))))
+cazymes<-cazymes%>%mutate(new1.03=ifelse(X1.3<0.05 & X1.3>0.01,"*",ifelse(X1.3<0.01 & X1.3>0.001,"**",ifelse(X1.3<0.001,"***","not-significant"))))
+cazymes<-cazymes%>%mutate(new1.05=ifelse(X1.5<0.05 & X1.5>0.01,"*",ifelse(X1.5<0.01 & X1.5>0.001,"**",ifelse(X1.5<0.001,"***","not-significant"))))
+cazymes<-cazymes%>%mutate(new2.03=ifelse(X2.3<0.05 & X2.3>0.01,"*",ifelse(X2.3<0.01 & X2.3>0.001,"**",ifelse(X2.3<0.001,"***","not-significant"))))
+cazymes<-cazymes%>%mutate(new2.05=ifelse(X2.5<0.05 & X2.5>0.01,"*",ifelse(X2.5<0.01 & X2.5>0.001,"**",ifelse(X2.5<0.001,"***","not-significant"))))
+cazymes<-cazymes%>%mutate(new3.05=ifelse(X3.5<0.05 & X3.5>0.01,"*",ifelse(X3.5<0.01 & X3.5>0.001,"**",ifelse(X3.5<0.001,"***","not-significant"))))
+
+write.csv(cazymes,file="new/Phylogenetic_anova_withdiet_211CAZYmes_128samples_march2021.csv")
+
+
+#list of CAZYmes discussed in lower termites section in paper-
+cazymes_clr_10perc_3above2_diet$diet_type_number4<-gsub("^","diet_",cazymes_clr_10perc_3above2_diet$diet_type_number4)
+cazymes_clr_10perc_3above2_diet<-as.data.frame(cazymes_clr_10perc_3above2_diet)
+rownames(cazymes_clr_10perc_3above2_diet)<-cazymes_clr_10perc_3above2_diet$diet_type_number4
+
+
+```
