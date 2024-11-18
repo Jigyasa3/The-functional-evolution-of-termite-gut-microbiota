@@ -9,8 +9,6 @@ awk -F"," '{print $3}' microbesonly-taxa-gtdb-lca-method2-matches-filename-230-1
 #-----------------------------------------------------------------------------------------------------------------------
 ##run microbes_fna.R to get the proteinIDs corresponding to contignames
 
-awk ' { print FILENAME"\t" $0} ' 230-13-prokka.map.gtf > filename-230-13-prokka.map.gtf # add the filename as the first column of the file.
-
 module load R/3.6.1
 R
 #load files-
